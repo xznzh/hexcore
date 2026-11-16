@@ -140,7 +140,7 @@ export default function WorkPage() {
         <Input.TextArea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={`把今天的工作交给 AI：提问、找资料、写周报（Enter 发送，去对话页继续）`}
+          placeholder={`把今天的工作交给 AI：提问、找资料、写周报（Enter 带入对话页，确认后发送）`}
           autoSize={{ minRows: 2, maxRows: 5 }}
           onPressEnter={(e) => {
             if (!e.shiftKey) {
@@ -152,7 +152,7 @@ export default function WorkPage() {
           className="work-input-box"
         />
         <div className="work-input-bar">
-          <span className="hint">Enter 发送 · 在对话页可使用 / 技能、@ 引用与附件</span>
+          <span className="hint">Enter 带入对话页，确认后发送 · 那边可用 / 技能、@ 引用与附件</span>
           <Button
             type="primary"
             shape="circle"
