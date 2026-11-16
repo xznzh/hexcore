@@ -19,6 +19,7 @@
 - [ ] `pnpm test` 通过（有新增逻辑的请补测试，不要只改实现）
 - [ ] `pnpm lint:ui` 通过（无硬编码颜色、无配色表外的 Tag）
 - [ ] `pnpm check:deps` 通过（锁文件 integrity 合法）
+- [ ] `pnpm check:workspace` 通过（tsconfig 未被临时构建目录污染、无环境文件入库）
 - [ ] 改了主流程（登录 / 对话 / 知识库 / 权限）时，**额外跑了 `pnpm e2e`** 并把结果贴下面
 - [ ] 在 `CHANGELOG.md` 的「未发布」段记了一条（用户需要知道的变化）
 

@@ -4,8 +4,9 @@ name: CI
 # 拆成五个 step 而不是直接跑 `pnpm check`，是为了失败时能一眼看出
 # 是类型、代码规范、界面规范、单测还是文档链接挂了。
 #
-# 无 Postgres / Redis：单测在设计上不依赖它们（连不上库时 949 通过 7 跳过），
-# 需要真实库的 e2e 由 QA_PGVECTOR_E2E / QA_IDEM_E2E 显式开关控制，CI 默认不跑。
+# 无 Postgres / Redis：单测在设计上不依赖它们，连不上库时绝大多数用例照常通过，
+# 需要真实依赖的用例由 QA_PGVECTOR_E2E / QA_IDEM_E2E 显式开关控制，CI 默认不跑。
+# （这里刻意不写具体通过数——写死了每次加测试都要回来改，而没人会记得改。）
 
 on:
   push:
@@ -41,6 +42,9 @@ jobs:
 
       - name: 锁文件 integrity 校验
         run: pnpm check:deps
+
+      - name: 工作区卫生（tsconfig 未被构建目录污染 / 无环境文件入库）
+        run: pnpm check:workspace
 
       - name: 类型检查
         run: pnpm typecheck

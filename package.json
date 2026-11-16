@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "lint:ui": "node scripts/check-ui-spec.mjs",
     "check:deps": "node scripts/check-lockfile-integrity.mjs",
-    "check": "npm run typecheck && npm run lint && npm run lint:ui && npm run test && npm run check:deps",
+    "check": "npm run typecheck && npm run lint && npm run lint:ui && npm run test && npm run check:deps && npm run check:workspace",
     "ci": "npm run check && npm run docs:check",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -35,7 +35,8 @@
     "prepare": "node scripts/setup-git-hooks.mjs",
     "eval:diff": "node evals/diff.mjs",
     "eval:trend": "node evals/trend.mjs",
-    "eval:nightly": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/nightly-eval.ps1"
+    "eval:nightly": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/nightly-eval.ps1",
+    "check:workspace": "node scripts/check-workspace.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.1.0",
