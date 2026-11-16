@@ -45,6 +45,22 @@ if (SECRET_IS_WEAK && process.env.NODE_ENV === 'production' && !IS_BUILD) {
   );
 }
 
+/**
+ * 启动期提示：生产环境 + 未显式设置 COOKIE_SECURE 时，若用明文 HTTP 访问，
+ * 浏览器会直接丢弃 Secure Cookie，用户看到的现象是「输完密码又回到登录页」——
+ * 页面不报错、服务端日志全是 200，排障成本极高，所以在启动时主动说清楚。
+ *
+ * 只告警不阻断：反代（Nginx / Caddy）终止 TLS 时容器内看到的也是 http，
+ * 这种情况下 Secure 才是正确配置，不该被拦。
+ */
+if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE === undefined && !IS_BUILD) {
+  console.warn(
+    '[auth] 提示：生产环境默认给会话 Cookie 加 Secure 标记。' +
+      '若你用 http://<IP>:3000 访问（没有 HTTPS），登录会被浏览器静默丢弃 —— ' +
+      '请设 COOKIE_SECURE=0 后重启；挂上 HTTPS 后再去掉这一项。',
+  );
+}
+
 export type Session = {
   userId: string;
   email: string;

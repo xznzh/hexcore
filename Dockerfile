@@ -34,6 +34,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# public/ 不会被 standalone 自动带上：favicon、分享图、静态资源都在这里，
+# 漏了这一行表现为「本地有图标、容器里 404」，且构建不会报错。
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # 运行时文件目录（上传件、生成的 docx/pptx）。必须挂持久卷，否则重建容器就丢。
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data

@@ -18,6 +18,12 @@ export async function register() {
   // ./lib/scheduler 的整条依赖链，撞上 fs/path/crypto/net/dns 这些
   // Node 内置模块而报 "Module not found"，构建直接失败。
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // 数据库自检放在最前面：它是绝大多数「启动成功但什么都用不了」的根因。
+    // 必须在 startScheduler 之前——调度器会立刻查库同步任务，库不通时它抛出的
+    // 错误更难读（而且那里的错误文本是 PG 原文，中文环境下是乱码）。
+    const { preflightDb } = await import('./lib/db');
+    await preflightDb();
+
     const { startScheduler } = await import('./lib/scheduler');
     startScheduler();
 

@@ -170,3 +170,68 @@ describe('classifyDbError', () => {
     expect(classifyDbError(undefined)).toBe('unknown');
   });
 });
+
+/**
+ * `dbErrorHint` 与 `classifyDbError` 是同一套判定的两个出口：
+ * 分类给探针（机器读、不含细节），建议给人（启动日志与首屏报错、要具体到命令）。
+ *
+ * 这里守的不是文案本身，而是三条会导致「提示等于没提示」的底线：
+ *   1. 每一类都必须给出下一步 —— 只回「数据库连不上」和回「服务器内部错误」一样没用；
+ *   2. 已知类别的提示必须可执行（含命令或明确的检查点）；
+ *   3. 任何一类都不得带出连接串细节（提示会出现在前端错误里，那是公网可见的位置）。
+ */
+describe('dbErrorHint', () => {
+  const KINDS = [
+    'auth_failed',
+    'database_missing',
+    'unreachable',
+    'timeout',
+    'dns_failed',
+    'tls_failed',
+    'unknown',
+  ] as const;
+
+  it('每个类别都有标题与修复建议，不存在空文案', async () => {
+    const { dbErrorHint } = await import('@/lib/health');
+    for (const k of KINDS) {
+      const h = dbErrorHint(k);
+      expect(h.title.trim().length, `${k} 缺标题`).toBeGreaterThan(0);
+      expect(h.fix.trim().length, `${k} 缺修复建议`).toBeGreaterThan(0);
+    }
+  });
+
+  it('库不存在给出 createdb 这一步（新手最容易漏的就是它）', async () => {
+    const { dbErrorHint } = await import('@/lib/health');
+    const h = dbErrorHint('database_missing');
+    expect(h.title).toContain('不存在');
+    expect(h.fix).toContain('createdb');
+    // 表是自动建的，必须说清「只差库」这件事，否则新手会去手工跑迁移
+    expect(h.fix).toContain('自动创建');
+  });
+
+  it('连不上时点明容器内不能用 localhost', async () => {
+    const { dbErrorHint } = await import('@/lib/health');
+    const h = dbErrorHint('unreachable');
+    expect(h.fix).toContain('localhost');
+    expect(h.fix).toMatch(/服务名|postgres:5432/);
+  });
+
+  it('任何类别的文案都不泄漏连接串 / 密码', async () => {
+    const { dbErrorHint } = await import('@/lib/health');
+    for (const k of KINDS) {
+      const text = `${dbErrorHint(k).title} ${dbErrorHint(k).fix}`;
+      expect(text.includes('postgres://'), `${k} 泄漏了连接串`).toBe(false);
+      expect(text.includes('postgres:postgres'), `${k} 泄漏了用户名密码`).toBe(false);
+    }
+  });
+
+  it('与分类函数串联：3D000 应一路走到「数据库不存在」', async () => {
+    const { classifyDbError, dbErrorHint } = await import('@/lib/health');
+    // 只给错误码、消息留空：模拟中文 Windows 下消息被打成乱码的情形，
+    // 证明这条链路不依赖 message 文本。
+    const err = Object.assign(new Error(''), { code: '3D000' });
+    const kind = classifyDbError(err);
+    expect(kind).toBe('database_missing');
+    expect(dbErrorHint(kind).title).toBe('数据库不存在');
+  });
+});

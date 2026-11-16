@@ -68,7 +68,15 @@ services:
       ALLOW_INSECURE_SECRET: ${ALLOW_INSECURE_SECRET:-1}
       # 演示模式：无需模型 Key 跑通对话 + 检索 + 引用；接真实模型后设为 0
       DEMO_MODE: ${DEMO_MODE:-1}
+      # 会话 Cookie 的 Secure 标记。
+      # 生产环境默认开启，但 compose 的默认访问方式是 http://<内网IP>:3000 ——
+      # 浏览器拒绝在非 HTTPS 源上保存 Secure Cookie，表现为「登录成功却立刻回到登录页」，
+      # 且页面不给任何错误提示，极难自查。这里默认关掉，等上了 HTTPS 再设 1。
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
       APP_ORIGINS: ${APP_ORIGINS:-}
+      # 指标抓取令牌（可选）。留空 = 开放 /api/metrics（内网抓取开箱可用）；
+      # 实例对外可达时设一个，Prometheus 侧带 Authorization: Bearer <token>。
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # 向量维度需与所选 embedding 模型一致；改这里要清空并重建知识库向量
       EMBED_DIM: ${EMBED_DIM:-384}
     depends_on:

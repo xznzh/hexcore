@@ -7,6 +7,7 @@ import { encryptText, safeDecrypt } from './crypto';
 import { EMBED_DIM } from './ai/embed-dim';
 import { DEMO_MODEL_ID, DEMO_PROVIDER, demoModeFlag } from './ai/demo';
 import { DEMO_KB_ID, DEMO_KB_NAME, DEMO_DOC_ID, DEMO_DOC_NAME, demoChunks } from './ai/demo-seed';
+import { classifyDbError, dbErrorHint } from './health';
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/ai_agent_platform';
@@ -15,7 +16,17 @@ const DATABASE_URL =
 // 若每次都 new 一个 pool（max 5），改动几十次就会耗尽 PostgreSQL 的 max_connections，
 // 表现为接口 500（too many clients）。生产环境只执行一次，无需挂载到 globalThis。
 const globalForDb = globalThis as unknown as { __pgClient?: ReturnType<typeof postgres> };
-const client = globalForDb.__pgClient ?? postgres(DATABASE_URL, { max: 5 });
+const client =
+  globalForDb.__pgClient ??
+  postgres(DATABASE_URL, {
+    max: 5,
+    // 抑制 NOTICE：建表后紧接着执行的 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+    // 会为每一列回一条「列已存在，跳过」（42701）。全新库也一样——因为 CREATE TABLE
+    // 已经建过这些列，ALTER 只是给老库补字段用。启动时十几条这种日志会把真正的
+    // 告警淹掉（容器日志里尤其明显），而它们不携带任何可执行信息，直接丢弃。
+    // 真正的错误走 ERROR 级别，不受此影响。
+    onnotice: () => {},
+  });
 if (process.env.NODE_ENV !== 'production') globalForDb.__pgClient = client;
 
 // 说明：drizzle-orm 0.36 的 $inferInsert 会把带 .default() / nullable 的列从 insert 类型中丢弃，
@@ -655,10 +666,64 @@ export function ensureInit() {
       trimOperationLogs().catch(() => {});
     })().catch((e) => {
       initPromise = null;
+      // 首次部署的失败原因高度集中：库没建、端口/主机不对、密码错。这三件事
+      // 在错误原文里本来是能看出来的，但中文 Windows 上的 PostgreSQL 用
+      // lc_messages=Chinese(936) 生成消息、经 UTF-8 通道传出来，到这边就是
+      // `���ݿ� "x" ������`（全是 U+FFFD），等于没有信息。
+      // 所以按错误码（SQLSTATE/errno 是 ASCII，不会乱码）给出可操作的一步。
+      const kind = classifyDbError(e);
+      const { title, fix } = dbErrorHint(kind);
+      console.error(
+        `\n[db] 初始化失败：${title}\n  修复建议：${fix}\n  连接目标：${safeTarget()}\n` +
+          `  原始错误：${String((e as { message?: unknown } | null)?.message ?? e).slice(0, 300)}\n`,
+      );
       throw e;
     });
   }
   return initPromise;
+}
+
+/**
+ * 把连接串收敛成 `host:port/db`，**不含用户名与密码**。
+ * 报错时用它指出「到底连的是哪儿」——只说「连不上」等于没说。
+ */
+function safeTarget(): string {
+  try {
+    const u = new URL(DATABASE_URL);
+    return `${u.hostname}:${u.port || 5432}${u.pathname}`;
+  } catch {
+    return '(DATABASE_URL 无法解析为合法连接串)';
+  }
+}
+
+/**
+ * 启动自检：只发一次 `SELECT 1`，连不上就把可操作指引打到日志最前面。
+ *
+ * 为什么需要它：没有这一步，数据库配错时进程照常启动、登录页照常能打开
+ * （渲染不需要库），直到用户点「注册」才拿到一句「服务器内部错误」——
+ * 新手会怀疑是自己填错了表单，而真正的原因在几屏之外的容器日志里。
+ *
+ * 只打印、不抛：进程要先起来，用户才能看到带 traceId 的错误；
+ * 若在这里抛，容器会反复重启，反而什么线索都留不下。
+ */
+export async function preflightDb(): Promise<void> {
+  try {
+    // 上限 5 秒：目标不可达时（防火墙丢包）驱动默认会等数十秒，
+    // 那会把「启动慢」和「配置错」两件事混在一起，反而更难判断。
+    await Promise.race([
+      client.unsafe('SELECT 1'),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(Object.assign(new Error('自检超时'), { code: 'ETIMEDOUT' })), 5000),
+      ),
+    ]);
+  } catch (e) {
+    const kind = classifyDbError(e);
+    const { title, fix } = dbErrorHint(kind);
+    console.error(
+      `\n[db] 启动自检未通过：${title}\n  修复建议：${fix}\n  连接目标：${safeTarget()}\n` +
+        `  原始错误：${String((e as { message?: unknown } | null)?.message ?? e).slice(0, 300)}\n`,
+    );
+  }
 }
 
 /**
