@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   const steps = JSON.parse(sk.steps || '[]');
   const manifest = {
-    schema: 'ai-agent-platform/skill@1',
+    schema: 'hexcore/skill@1',
     name: sk.name,
     description: sk.description || '',
     scope: sk.scope,

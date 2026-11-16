@@ -27,9 +27,9 @@
 .EXAMPLE
     # 注册为每天凌晨 2:00 的计划任务（需要管理员 PowerShell；机器须不休眠、数据库在跑）
     $a = New-ScheduledTaskAction -Execute 'powershell.exe' `
-         -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Python WorkSpace\ai-agent-platform\scripts\nightly-eval.ps1"'
+         -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Python WorkSpace\hexcore\scripts\nightly-eval.ps1"'
     $t = New-ScheduledTaskTrigger -Daily -At 2:00am
-    Register-ScheduledTask -TaskName 'ai-agent-platform 夜间评测' -Action $a -Trigger $t -Description '每晚跑 golden set 并更新趋势'
+    Register-ScheduledTask -TaskName 'hexcore 夜间评测' -Action $a -Trigger $t -Description '每晚跑 golden set 并更新趋势'
 
 .NOTES
     退出码：0 正常 / 2 疑似回归 / 3 配置缺失 / 4 评测进程异常 / 5 趋势脚本异常。

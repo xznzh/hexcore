@@ -53,9 +53,9 @@ npm run eval:nightly
 
 ```powershell
 $a = New-ScheduledTaskAction -Execute 'powershell.exe' `
-     -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Python WorkSpace\ai-agent-platform\scripts\nightly-eval.ps1"'
+     -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Python WorkSpace\hexcore\scripts\nightly-eval.ps1"'
 $t = New-ScheduledTaskTrigger -Daily -At 2:00am
-Register-ScheduledTask -TaskName 'ai-agent-platform 夜间评测' -Action $a -Trigger $t
+Register-ScheduledTask -TaskName 'hexcore 夜间评测' -Action $a -Trigger $t
 ```
 
 脚本参数：`-SkipEval`（只重画趋势）、`-KeepDays 14`（报告保留天数）、`-WhatIfClean`（只列出待清理文件）。退出码：`0` 正常 / `2` 疑似回归 / `3` 配置缺失 / `4` 评测进程异常 / `5` 趋势脚本异常。

@@ -18,7 +18,7 @@
     每日触发时间，默认 02:00。
 
 .PARAMETER TaskName
-    任务名，默认 'ai-agent-platform 夜间评测'。
+    任务名，默认 'hexcore 夜间评测'。
 
 .PARAMETER Unregister
     删除已注册的任务，不新建。
@@ -42,7 +42,7 @@
 [CmdletBinding()]
 param(
     [string]$At = '02:00',
-    [string]$TaskName = 'ai-agent-platform 夜间评测',
+    [string]$TaskName = 'hexcore 夜间评测',
     [switch]$Unregister
 )
 
