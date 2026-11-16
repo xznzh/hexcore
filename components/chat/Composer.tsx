@@ -140,10 +140,11 @@ export default function Composer(props: ComposerProps) {
         search: `${m.name} ${m.provider} ${PROVIDER_LABEL[m.provider] || ''} ${m.id}`,
         title: `${m.name} · ${PROVIDER_LABEL[m.provider] || m.provider}${ctx ? ` · 上下文 ${ctx}` : ''}${
           caps.includes('tools') ? ' · 支持工具调用' : ''
-        }${m.isDefault ? ' · 默认模型' : ''}`,
+        }${m.isDefault ? ' · 默认模型' : ''}${m.usable === false ? ' · 未配置 Key，调用会失败' : ''}`,
         caps,
         ctx,
         isDefault: m.isDefault,
+        usable: m.usable !== false,
       };
       const key = m.provider || '其他';
       const arr = map.get(key) || [];
@@ -399,7 +400,7 @@ export default function Composer(props: ComposerProps) {
             </Tag>
           )}
           {caps.map((c) => (
-            <Tag color="blue" closable onClose={() => props.onDetachCap(c.id)} style={{ margin: 0 }}>
+            <Tag key={c.id} color="blue" closable onClose={() => props.onDetachCap(c.id)} style={{ margin: 0 }}>
               <ApartmentOutlined /> 能力：{c.name}
             </Tag>
           ))}
@@ -549,6 +550,7 @@ export default function Composer(props: ComposerProps) {
                   <span className="model-opt-name">{d.label}</span>
                   <span className="model-opt-meta">
                     {d.isDefault && <span className="model-badge model-badge-default">默认</span>}
+                    {d.usable === false && <span className="model-badge model-badge-warn">未配置</span>}
                     {caps.includes('tools') && <span className="model-badge">工具</span>}
                     {caps.includes('vision') && <span className="model-badge">视觉</span>}
                     {d.ctx && <span className="model-ctx">{d.ctx}</span>}

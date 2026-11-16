@@ -36,6 +36,7 @@ import {
   TeamOutlined,
   LockOutlined,
   CloudDownloadOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 import { MessageItem, type MsgActions } from './chat/MessageItem';
 import Composer from './chat/Composer';
@@ -92,6 +93,8 @@ export default function Chat() {
   const [shareUrl, setShareUrl] = useState('');
   const [wsFiles, setWsFiles] = useState<{ id: string; filename: string; size: number }[]>([]);
   const [wsOpen, setWsOpen] = useState(true);
+  // 窄屏会话抽屉（≤900px 时列表变成覆盖层，桌面端该状态无视觉影响）
+  const [listOpen, setListOpen] = useState(false);
   const shareVisibility = Form.useWatch('visibility', shareForm);
   const [listening, setListening] = useState(false);
 
@@ -150,7 +153,14 @@ export default function Chat() {
         } catch {
           /* 隐私模式下 localStorage 可能被禁用 */
         }
-        const pick = d.find((m) => m.id === saved) || d.find((m) => m.isDefault) || d[0];
+        // 优先沿用上次选的模型（本地记住），但记住的那个必须「现在还能调」：
+        // 用户之前选过某个预设、后来 Key 被清掉时，沿用会把第一句话直接打挂。
+        // 依次回落：默认模型 → 第一个可用模型 → 列表第一个。
+        const pick =
+          d.find((m) => m.id === saved && m.usable !== false) ||
+          d.find((m) => m.isDefault) ||
+          d.find((m) => m.usable !== false) ||
+          d[0];
         if (pick) setModelId(pick.id);
       })
       .catch(() => {});
@@ -281,6 +291,8 @@ export default function Chat() {
   }, [msgs]);
 
   function selectConv(id: string) {
+    // 窄屏下会话列表是覆盖式抽屉：选中即收起，否则会盖住刚打开的对话
+    setListOpen(false);
     if (loadAbortRef.current) loadAbortRef.current.abort();
     const c = convs.find((x) => x.id === id);
     setActiveId(id);
@@ -400,7 +412,6 @@ export default function Chat() {
   // —— 技能安装提议（对话内发起 → 管理员确认后生效）——
   useEffect(() => {
     loadProposals();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadProposals() {
@@ -643,6 +654,11 @@ export default function Chat() {
             realU = ev.u || '';
             realA = ev.a || '';
             idsSeen = true;
+            // 首条消息后服务端会把占位标题换成正文前 20 字（api/chat 里同口径），
+            // 本地同步一次——否则侧栏要等下次刷新才变，用户会以为「发了消息但会话还叫新对话」。
+            setConvs((list) =>
+              list.map((x) => (x.id === cid && x.title === '新对话' ? { ...x, title: t.slice(0, 20) } : x)),
+            );
             if (activeIdRef.current === cid) {
               setMsgs((m) =>
                 m.map((x) => {
@@ -1047,8 +1063,8 @@ export default function Chat() {
 
   return (
     <div className="chat-shell">
-      {/* 左：会话列表 */}
-      <div className="chat-list">
+      {/* 左：会话列表（≤900px 时为覆盖式抽屉） */}
+      <div className={`chat-list${listOpen ? ' open' : ''}`}>
         <div className="chat-list-head">
           <Tooltip title={isGuest ? '访客为只读角色，无法新建对话' : ''}>
             {/* 主色实心大块会把视线从小输入框抢走，这里用带主色描边的次按钮 */}
@@ -1089,10 +1105,21 @@ export default function Chat() {
         </div>
       </div>
 
+      {/* 窄屏抽屉遮罩：点空白处收起 */}
+      {listOpen && <div className="chat-list-mask" onClick={() => setListOpen(false)} />}
+
       {/* 右：对话区 */}
       <div className="chat-main">
         <div className="chat-topbar">
           <Space size={8} wrap>
+            <Button
+              className="chat-list-toggle"
+              type="text"
+              size="small"
+              icon={<MenuOutlined />}
+              aria-label="打开会话列表"
+              onClick={() => setListOpen(true)}
+            />
             <strong style={{ fontSize: 16 }}>对话</strong>
             <Tag color="cyan" style={{ fontSize: 11, lineHeight: '18px' }}>
               知识库 + 长期记忆

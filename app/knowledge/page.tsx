@@ -256,7 +256,6 @@ export default function KnowledgePage() {
     if (!hasIndexing || !activeKb) return;
     const t = setInterval(() => refreshDocs(activeKb), 3000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasIndexing, activeKb]);
 
   async function handleReindex() {

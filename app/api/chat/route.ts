@@ -9,6 +9,7 @@ import { getSession } from '@/lib/auth';
 import { resolveModelWithFallback, resolveModelForTask } from '@/lib/llm';
 import { callModel } from '@/lib/llm-gateway';
 import { retrieve, filterRelevantHits } from '@/lib/ai/rag';
+import { userFacingModelError } from '@/lib/ai/error-text';
 import { retrieveMemories, extractMemories } from '@/lib/ai/memory';
 import { summarizeVerify } from '@/lib/agent/runtime-verify';
 import { verifyChannelAnswer } from '@/lib/agent/channel-verify';
@@ -44,6 +45,7 @@ import { logLlm } from '@/lib/observability';
 import { getCached, setCached, logCache } from '@/lib/cache';
 import { cacheDecision } from '@/lib/agent/cache-key';
 import { readTokenUsage } from '@/lib/agent/token-usage';
+import { incCounter, observeMs } from '@/lib/metrics';
 import { resolveSafe } from '@/lib/storage';
 import { extractTextFromBuffer } from '@/lib/ai/extract';
 import { notifyQuotaOnce } from '@/lib/notify';
@@ -191,10 +193,42 @@ export async function POST(req: NextRequest) {
   // 一次对话会触发「检索 → 工具调用 → 多轮模型调用 → 审批 → 落库」，
   // 用 traceId 把它们串成一条链路：日志/埋点里都会带上 [trace:xxx]，排障按 id 检索即可。
   const traceId = traceIdFromHeaders(req.headers);
-  return runWithTrace({ traceId, entry: 'chat' }, () => handleChat(req, traceId));
+  const startedAt = Date.now();
+  let res: Response | undefined;
+  try {
+    res = await runWithTrace({ traceId, entry: 'chat' }, () => handleChat(req, traceId));
+    return res;
+  } finally {
+    // chat 是手写的流式路由（没走 `withApi`），但 RED 指标的口径必须与其它路由一致：
+    // 否则看板上「最该看的那个路由」恰好是空白。
+    // 这里量的是**响应开始**的时间（流式接口的 TTFB），整轮耗时另记在
+    // `hexcore_chat_turn_duration_ms`——两个数混在一个指标里会互相污染。
+    incCounter('hexcore_api_requests_total', 'API 请求数（按路由 / 方法 / 状态码）', {
+      route: '/api/chat',
+      method: 'POST',
+      status: res?.status ?? 500,
+    });
+    observeMs('hexcore_api_duration_ms', 'API 请求耗时（毫秒）', Date.now() - startedAt, { route: '/api/chat' });
+  }
 }
 
 async function handleChat(req: NextRequest, traceId: string) {
+  // ── 全景：本函数是一条一千多行的**线性流水线**，刻意不拆成多个模块 ──
+  // 拆分的收益是「文件小」，代价是各段之间的真实约束会散落到文件之外。这里的约束包括：
+  //   · 检索只能等「知识库列表」（小表），不能等消息表（大表），否则首字延迟被拖长
+  //   · 历史裁剪的预算要用到「模型能力行」，所以能力查询必须在裁剪之前完成
+  //   · SSE 的三类中止源（断开 / 预算 / 空闲超时）要一路贯穿到「半截落库」
+  //   · 摘要水位线必须在「本轮检索到的历史」确定之后写
+  // 这些不是可以靠接口签名表达的依赖，拆开后只能在注释里互相指路，读者更难确认真实执行顺序。
+  // 因此保持单函数，改用下面的阶段索引降低跳读成本（每段正文开头都有对应的「—— xxx ——」注释）：
+  //   ① 准入      trace / ensureInit / 会话 / 访客只读 / 限流
+  //   ② 入参      body 解析、@cap 标记剥离、输入侧护栏
+  //   ③ 模型      带降级链的模型解析 → 能力行 → 额度检查
+  //   ④ 会话      存在性保证、占位标题补齐
+  //   ⑤ 并行      项目上下文 / 附件 / 个人快照 / 历史+检索+记忆 四路同时发起
+  //   ⑥ 上下文    历史按 token 预算裁剪、增量摘要、system 分段组装
+  //   ⑦ 调用      工具循环（上限见 lib/agent/turn-limits）、流式增量下发
+  //   ⑧ 收尾      引用块、落库、记忆抽取、用量记账
   // 分段耗时：只在 PERF_LOG=1 或本轮超过 2.5s 时打一行。
   // 「哪里慢」不该靠读代码推演——推演会错，打点不会。
   const perf = startPerf('chat');
@@ -308,6 +342,15 @@ async function handleChat(req: NextRequest, traceId: string) {
   }
 
   const convRow = conv[0];
+
+  // 标题补齐：用户先点「新建对话」（标题落成占位值「新对话」）、再发第一条消息时，
+  // 上面的 insert 分支不会执行，标题就永远停在「新对话」——会话一多，列表里全是
+  // 一模一样的条目，等于没有标题。这里在首条消息到达时把它换成正文前 20 字。
+  // 只覆盖占位值：用户手动改过的标题不动。
+  if (convRow?.title === '新对话') {
+    const autoTitle = (cleanPrompt || prompt).slice(0, 20);
+    await db.update(conversations).set({ title: autoTitle }).where(eq(conversations.id, conversationId));
+  }
 
   // 个人数据快照：让不支持 Function Calling 的模型也能回答“我的额度/项目/文件…”（避免模型编造数据）
   // 与项目/附件/检索同时发起：它自己要跑 1 次实时聚合 + 1 次 5 条查询的清单（memo 未命中时），
@@ -923,13 +966,29 @@ async function handleChat(req: NextRequest, traceId: string) {
       };
       const streamGuard: StreamGuardState = createStreamGuard();
       let guardBlocked = false;
+      /**
+       * 首字时刻（相对本轮开始）。
+       * 为什么要单独量：用户感知的「快不快」几乎只取决于它，而整轮耗时被工具调用和
+       * 落库拖长时，只看总时长会得出「模型很慢」的错误结论。
+       */
+      let firstDeltaAt = 0;
       const onGuardHit = (rule: string, detail: string) => {
+        // 对话通道的流式护栏命中：与 answer-guard 的口径统一到同一条指标，
+        // 否则「哪个通道在拦、拦了什么」要跨两套数据才能拼出来。
+        incCounter('hexcore_guardrail_hits_total', '出口护栏命中次数（按通道 / 规则 / 模式）', {
+          source: 'chat',
+          rule,
+          mode: 'block',
+        });
         logAction(s.userId, 'guardrail_output_block', rule, { status: 'error', detail }).catch(() => {});
       };
       const pushText = (chunk: string) => {
         if (!chunk || guardBlocked) return;
         const r = pushDelta(streamGuard, chunk, guardCtx);
-        if (r.emit) send(emit({ t: 'd', v: r.emit }));
+        if (r.emit) {
+          if (!firstDeltaAt) firstDeltaAt = Date.now();
+          send(emit({ t: 'd', v: r.emit }));
+        }
         full = guardedText(streamGuard);
         if (r.blocked) {
           guardBlocked = true;
@@ -984,7 +1043,7 @@ async function handleChat(req: NextRequest, traceId: string) {
             }
             streamError = msg;
             console.error('[chat] 流内错误:', em?.stack || em || msg);
-            send(emit({ t: 'd', v: `\n\n⚠️ ${msg}` }));
+            send(emit({ t: 'd', v: `\n\n⚠️ ${userFacingModelError(msg)}` }));
           } else if (part.type === 'finish') {
             // P-01(C)：收到模型 finish 立即把护栏尾部余量推给用户。
             // v8.11 起护栏改为自适应尾部窗口（正常文本仅留 6 字符、疑似危险前缀才回到
@@ -1000,7 +1059,9 @@ async function handleChat(req: NextRequest, traceId: string) {
             flushText();
           }
         }
-        if (sourcesList.length) {
+        // 出错时不再挂参考来源：气泡里已经是「连不上模型」，底下再列 3 条文档，
+        // 看起来像「回答里引用了这些资料」，反而误导用户以为模型读过。
+        if (sourcesList.length && !streamError) {
           const tail = '\n\n---\n\n📚 **参考来源**\n' + sourcesList.map((sx, i) => `${i + 1}. ${sx}`).join('\n');
           pushText(tail);
         }
@@ -1055,7 +1116,9 @@ async function handleChat(req: NextRequest, traceId: string) {
         const msg = String(e?.message || e);
         console.error('[chat] 流式生成失败:', msg);
         logLlm({ model: resolved!.name, label: 'chat-stream', ms: Date.now() - t0, ok: false, error: msg }).catch(() => {});
-        const note = `\n\n⚠️ 生成中断：${msg}`;
+        // 原始异常只进日志；气泡里给归类后的中文与下一步动作。
+        streamError = msg;
+        const note = `\n\n⚠️ 生成中断：${userFacingModelError(msg)}`;
         pushText(note);
       }
       // 收尾兜底 flush：正常情况下已在模型 `finish` 时推过一次，这里处理两件事——
@@ -1195,6 +1258,14 @@ async function handleChat(req: NextRequest, traceId: string) {
       send(emit({ t: 'done' }));
       perf.lap('persist');
       perf.done(`model=${resolved!.name} turn_tokens=${turnBudget.used()} trace=${traceId}`);
+      // 对话轮次的两条核心指标：结果分布 + 整轮耗时 + 首字耗时。
+      // `cancelled` 单独一档：客户端主动取消既不是成功也不是失败，
+      // 混进 error 会让「模型稳定率」被用户点关闭的动作污染。
+      incCounter('hexcore_chat_turns_total', '对话轮次（按结果）', {
+        result: streamError ? 'error' : clientGone ? 'cancelled' : 'ok',
+      });
+      observeMs('hexcore_chat_turn_duration_ms', '对话整轮耗时（毫秒）', Date.now() - t0);
+      if (firstDeltaAt) observeMs('hexcore_chat_ttft_ms', '对话首字耗时（毫秒）', firstDeltaAt - t0);
       if (!clientGone) {
         try {
           controller.close();

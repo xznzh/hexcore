@@ -31,6 +31,11 @@ export default function TrendChart({
   ariaLabel,
   className,
 }: Props) {
+  // Hook 必须在任何提前 return 之前调用：若放在 `if (!data.length) return null` 之后，
+  // 数据从「有」变「空」时本次渲染的 hook 数量会变少，React 直接抛
+  // "Rendered fewer hooks than expected"（筛选/刷新把曲线清空时必然复现）。
+  const gradId = `trend-${React.useId().replace(/:/g, '')}`;
+
   if (!data.length) return null;
 
   const max = Math.max(...data);
@@ -49,7 +54,6 @@ export default function TrendChart({
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
     .join(' ');
   const area = `${line} L${width.toFixed(1)},${height} L0,${height} Z`;
-  const gradId = `trend-${React.useId().replace(/:/g, '')}`;
 
   return (
     <svg

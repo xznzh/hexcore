@@ -5,6 +5,8 @@ export type ModelOption = {
   name: string;
   provider: string;
   isDefault: boolean;
+  /** 服务端判定「现在就能调用」：未配置 Key 的预设模型为 false，下拉里要显式标出来 */
+  usable?: boolean;
   caps?: string[];
   contextLength?: number;
 };

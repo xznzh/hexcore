@@ -48,6 +48,9 @@
   --success: #3fb950;
   --warning: #d29922;
   --danger: #f85149;
+  /* 失败态气泡用：深色主题下低透明度红，既能一眼看出异常又不刺眼 */
+  --danger-soft: rgba(248, 81, 73, 0.08);
+  --danger-border: rgba(248, 81, 73, 0.42);
 
   /* 用户气泡 / 头像基准（跟随主色，不再硬编码 #0e7490） */
   --user-bubble: var(--accent);
@@ -114,6 +117,11 @@
   --accent-soft: rgba(8, 145, 178, 0.1);
   --accent-border: rgba(8, 145, 178, 0.3);
   --hover-bg: rgba(0, 0, 0, 0.045);
+
+  /* 失败态：亮色底上深一档的红，保证对比度（深色主题的 #f85149 在浅底上偏飘） */
+  --danger: #cf222e;
+  --danger-soft: rgba(207, 34, 46, 0.06);
+  --danger-border: rgba(207, 34, 46, 0.28);
 
   --user-bubble: var(--accent);
   --user-bubble-text: #ffffff;
@@ -693,6 +701,10 @@ a {
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
+/* 移动端专用：拉出会话抽屉的入口。桌面端三栏并排，不需要这个按钮 */
+.chat-list-toggle {
+  display: none;
+}
 .chat-scroll-wrap {
   position: relative;
   flex: 1;
@@ -838,6 +850,12 @@ a {
   background: transparent;
   border: 1px solid var(--border);
   border-top-left-radius: var(--radius-sm);
+}
+/* 失败气泡：与正常回答视觉上分开，避免「模型根本没连上」被当成「模型答得不好」。
+   服务端只保证正文以 ⚠️ 起头（见 lib/ai/error-text.ts），样式在这里兜底。 */
+.chat-bubble.assistant.err {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 .msg-actions {
   display: flex;
@@ -1137,6 +1155,12 @@ a {
   border-color: var(--accent);
   background: transparent;
 }
+/* 未配置 Key 的预设模型：不隐藏（用户可能正准备接），但要显式提示选了会失败 */
+.model-badge-warn {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: transparent;
+}
 .model-ctx {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -1340,6 +1364,7 @@ a {
     height: calc(100vh - var(--sp-5) * 2);
     height: calc(100dvh - var(--sp-5) * 2);
     flex-direction: column;
+    position: relative;
   }
   .chat-ws {
     display: none;
@@ -1349,9 +1374,36 @@ a {
   .chat-main {
     min-height: 0;
   }
+  /* 会话列表改成覆盖式抽屉。
+     旧实现是 `width:100%; max-height:180px` 与对话区上下堆叠，390px 下两块都被压扁，
+     消息区只剩一条骨架屏的高度，等于不可用。抽屉保证「对话区始终占满整屏」，
+     列表按需拉出，选完自动收起。
+     用 fixed 而不是 absolute：对话区不在视口原点（左侧还有 56px 图标栏 + 内边距），
+     absolute + translateX(-102%) 关不干净，会在侧栏位置残留几十像素。 */
   .chat-list {
-    width: 100%;
-    max-height: 180px;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(84%, 320px);
+    max-height: none;
+    z-index: 60;
+    transform: translateX(-102%);
+    transition: transform var(--dur) var(--ease);
+    box-shadow: var(--shadow-lg);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  }
+  .chat-list.open {
+    transform: none;
+  }
+  .chat-list-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .chat-list-toggle {
+    display: inline-flex;
   }
   /* 窄屏下输入区工具行（附件/引用/技能/语音/模型 + 发送）总宽超出容器，
      发送按钮被顶到视口外（实测 375px 下 right=511px，点不到）。

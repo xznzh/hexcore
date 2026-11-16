@@ -27,6 +27,31 @@ export async function resolveModel(modelId: string): Promise<ResolvedModel | nul
   return { instance: client(m.name), id: m.id, name: m.name };
 }
 
+/**
+ * 模型是否「现在就能调用」——用于模型下拉的可用性标记与默认项选择。
+ *
+ * 判定口径：
+ *  - 演示模型恒可用（本地规则，不连网）；
+ *  - ollama 视作可用：本机常驻服务，不需要 API Key，是否真跑着只有调用时才知道；
+ *  - 其余厂商必须有可解密的非空 Key，否则调用必然 401/连接失败。
+ *
+ * 为什么单独抽出来：此前「模型能不能用」只在 `resolveDefaultModel` 里判定，
+ * `resolveModel(id)` 只要库里有记录就返回一个客户端，导致前端默认选中一个没配 Key 的
+ * 预设模型时，请求直接打到不存在的端点，绕过整个降级链——正是「clone 下来第一句就报错」
+ * 的根因。把它变成显式可达的属性，列表、默认项、降级三处才能共用同一口径。
+ */
+export function modelReady(m: { provider?: string | null; apiKey?: string | null }): boolean {
+  if (!m) return false;
+  if (m.provider === DEMO_PROVIDER) return true;
+  if (m.provider === 'ollama') return true;
+  if (!m.apiKey) return false;
+  try {
+    return decryptText(m.apiKey).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** 是否具备对话能力（embedding / rerank 等模型不能当聊天模型用） */
 export function canChat(capsJson: string | null): boolean {
   try {
@@ -54,13 +79,17 @@ async function hasUsableChatModel(): Promise<boolean> {
   let value = false;
   try {
     const rows = await db.select().from(models);
+    // 注意这里比 modelReady 更严：ollama / 演示模型都不算「真正可用」。
+    // 判定目的是「要不要自动切到演示模式」——ollama 是否真跑着无法预知，
+    // 若把它算成可用，则新装实例会认为有模型、于是不去演示模式，第一句就打到空端点。
+    // 反过来 ollama 用户在模型下拉里手动选它，选择会持久化，不受此判定影响。
     value = rows.some(
       (m) =>
         m.enabled !== false &&
         m.provider !== DEMO_PROVIDER &&
+        m.provider !== 'ollama' &&
         canChat(m.capabilities) &&
-        !!m.apiKey &&
-        decryptText(m.apiKey).length > 0,
+        modelReady(m),
     );
   } catch {
     // 库还没就绪时按「没有可用模型」处理，让演示模式接管，避免直接报错

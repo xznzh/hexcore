@@ -39,9 +39,41 @@ const notoSansSC = localFont({
   preload: false,
 });
 
+/**
+ * 站点元信息。
+ *
+ * metadataBase 必须显式给：否则 openGraph 里的相对图片地址不会升级成绝对 URL，
+ * 微信 / Twitter / Slack 抓取时拿不到图，分享卡片就是一张空白。
+ * 优先用 APP_ORIGINS（对外域名），退回本机地址；只影响分享卡片，不影响鉴权。
+ */
+const SITE_URL = (process.env.APP_ORIGINS || '').split(',')[0]?.trim() || 'http://localhost:3000';
+
 export const metadata: Metadata = {
-  title: 'AI Agent Platform · 小团队协作智能体',
-  description: '个人发起、小团队共同使用的本地优先 AI 智能体协作平台',
+  metadataBase: (() => {
+    try {
+      return new URL(SITE_URL);
+    } catch {
+      return new URL('http://localhost:3000');
+    }
+  })(),
+  title: 'Hexcore · 小团队 AI Agent 协作平台',
+  description:
+    '可私有化部署的小团队 AI Agent 平台：对话、RAG 知识库、技能编排、能力网关、定时任务，全部跑在自己的 PostgreSQL 上。不配模型 Key 也能用演示模式跑通全链路。',
+  applicationName: 'Hexcore',
+  keywords: ['AI Agent', 'RAG', '知识库', '私有化部署', 'MCP', 'Next.js', 'PostgreSQL', 'pgvector'],
+  openGraph: {
+    type: 'website',
+    siteName: 'Hexcore',
+    title: 'Hexcore · 私有化部署的 AI Agent 协作平台',
+    description: '对话 / RAG / 技能编排 / 定时任务，工具调用四道关（权限 → 审批 → 超时 → 审计），缺什么降级什么。',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Hexcore' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Hexcore · 私有化部署的 AI Agent 协作平台',
+    description: '对话 / RAG / 技能编排 / 定时任务，全部跑在你自己的 PostgreSQL 上。',
+    images: ['/og.png'],
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

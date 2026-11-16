@@ -1,4 +1,5 @@
 import { resolveModel, resolveDefaultModel, canChat } from './ai/providers';
+import { demoModeFlag } from './ai/demo';
 import { models } from './schema';
 import { db } from './db';
 import { eq } from 'drizzle-orm';
@@ -40,6 +41,11 @@ const FALLBACK_TTL_MS = 30_000;
 
 export async function resolveModelWithFallback(modelId?: string): Promise<ResolvedModel | null> {
   const compute = async (): Promise<ResolvedModel | null> => {
+    // 强制演示（DEMO_MODE=1）：忽略前端传来的 modelId。
+    // 前端会把上次选中 / 默认选中的模型 id 带上来，而演示模式下那些预设多半没有 Key，
+    // 一旦放行就绕过了整个演示分支——新用户 clone 下来第一句必定报连接失败。
+    if (demoModeFlag() === true) return resolveDefaultModel();
+
     if (modelId) {
       const r = await resolveModel(modelId);
       if (r) return r;

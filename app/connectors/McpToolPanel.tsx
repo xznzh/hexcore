@@ -414,38 +414,40 @@ function McpCallModal({ connectorId, tool, onClose }: { connectorId: string; too
             </Space>
           );
           const tip = p.description ? <Text type="secondary" style={{ fontSize: 12 }}>{p.description}</Text> : undefined;
-          const common = { key: name, name, label, extra: tip, rules: required.has(name) ? [{ required: true, message: `请填写 ${name}` }] : undefined };
+          // key 不能塞进 common 再展开：React 19 起「展开 props 携带 key」会被忽略并告警，
+          // 列表项因此失去稳定标识（参数表单重渲染时输入框会丢焦点）。
+          const common = { name, label, extra: tip, rules: required.has(name) ? [{ required: true, message: `请填写 ${name}` }] : undefined };
 
           if (kind === 'enum') {
             return (
-              <Form.Item {...common}>
+              <Form.Item key={name} {...common}>
                 <Select allowClear options={(p.enum || []).map((v) => ({ value: v, label: v }))} placeholder="请选择" />
               </Form.Item>
             );
           }
           if (kind === 'number') {
             return (
-              <Form.Item {...common}>
+              <Form.Item key={name} {...common}>
                 <InputNumber style={{ width: '100%' }} placeholder={p.type === 'integer' ? '整数' : '数字'} />
               </Form.Item>
             );
           }
           if (kind === 'boolean') {
             return (
-              <Form.Item {...common} valuePropName="checked" initialValue={false}>
+              <Form.Item key={name} {...common} valuePropName="checked" initialValue={false}>
                 <Switch />
               </Form.Item>
             );
           }
           if (kind === 'json') {
             return (
-              <Form.Item {...common} tooltip='按 JSON 填写，例如 ["a","b"] 或 {"k":1}'>
+              <Form.Item key={name} {...common} tooltip='按 JSON 填写，例如 ["a","b"] 或 {"k":1}'>
                 <Input.TextArea rows={3} placeholder={p.type === 'array' ? '["a","b"]' : '{"k":1}'} />
               </Form.Item>
             );
           }
           return (
-            <Form.Item {...common}>
+            <Form.Item key={name} {...common}>
               <Input placeholder="文本" />
             </Form.Item>
           );

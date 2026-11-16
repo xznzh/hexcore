@@ -88,6 +88,9 @@ export const MessageItem = memo(function MessageItem({
   // 用户消息里可能残留旧版 @cap:<id>:<name> 标记（历史数据 / 手工输入），显示前统一剥掉
   const userText = (m.content || '').replace(/@cap:[\w-]+(?::[^ @]*)?/g, '').replace(/\s{2,}/g, ' ').trim();
   const caps = m.role === 'user' ? m.meta?.caps || [] : [];
+  // 失败回答用「警告气泡」渲染：此前错误与正常回答长得一模一样，用户分不清
+  // 「模型答得差」和「模型根本没连上」。判定口径与服务端一致——正文以 ⚠️ 起头。
+  const isError = m.role === 'assistant' && /^\s*⚠️/.test(m.content || '');
   return (
     <div
       ref={(el) => setRef(m.id, el)}
@@ -101,7 +104,7 @@ export const MessageItem = memo(function MessageItem({
           <span className="msg-name">{m.role === 'user' ? '我' : 'AI 助手'}</span>
           <span className="msg-time">{fmtTime(m.createdAt)}</span>
         </div>
-        <div className={`chat-bubble ${m.role}`}>
+        <div className={`chat-bubble ${m.role}${isError ? ' err' : ''}`}>
           {caps.length > 0 && (
             <div className="msg-caps">
               {caps.map((c) => (
@@ -141,25 +144,29 @@ export const MessageItem = memo(function MessageItem({
           )}
           {m.role === 'assistant' && (
             <>
-              <Tooltip title="有用">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<LikeOutlined />} aria-label="点赞"
-                  style={{ color: m.feedback === 'up' ? 'var(--accent)' : undefined }}
-                  onClick={() => actions.feedback(m, 'up')}
-                />
-              </Tooltip>
-              <Tooltip title="没帮助">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<DislikeOutlined />} aria-label="点踩"
-                  style={{ color: m.feedback === 'down' ? 'var(--danger)' : undefined }}
-                  onClick={() => actions.feedback(m, 'down')}
-                />
-              </Tooltip>
-              {!isGuest && (
+              {!isError && (
+                <>
+                  <Tooltip title="有用">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<LikeOutlined />} aria-label="点赞"
+                      style={{ color: m.feedback === 'up' ? 'var(--accent)' : undefined }}
+                      onClick={() => actions.feedback(m, 'up')}
+                    />
+                  </Tooltip>
+                  <Tooltip title="没帮助">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<DislikeOutlined />} aria-label="点踩"
+                      style={{ color: m.feedback === 'down' ? 'var(--danger)' : undefined }}
+                      onClick={() => actions.feedback(m, 'down')}
+                    />
+                  </Tooltip>
+                </>
+              )}
+              {!isGuest && !isError && (
                 <>
                   <Dropdown
                     trigger={['click']}
@@ -187,9 +194,11 @@ export const MessageItem = memo(function MessageItem({
                   </Tooltip>
                 </>
               )}
-              <Tooltip title="语音播报">
-                <Button type="text" size="small" icon={<SoundOutlined />} aria-label="朗读" onClick={() => actions.speak(m.content)} />
-              </Tooltip>
+              {!isError && (
+                <Tooltip title="语音播报">
+                  <Button type="text" size="small" icon={<SoundOutlined />} aria-label="朗读" onClick={() => actions.speak(m.content)} />
+                </Tooltip>
+              )}
             </>
           )}
         </div>
@@ -256,7 +265,7 @@ export const MessageItem = memo(function MessageItem({
           </div>
         )}
 
-        {m.role === 'assistant' && m.content && sources.length > 0 && (
+        {m.role === 'assistant' && m.content && sources.length > 0 && !isError && (
           <div className="refs">
             <FileTextOutlined style={{ color: 'var(--muted)', fontSize: 12 }} />
             {sources.map((s, i) => (
