@@ -669,7 +669,9 @@ async function runCheckInner(
   // 而真正需要回溯的是「什么时候发过告警、发给了几个人」。
   // 外发失败必须单独留痕：它是最容易被忽略的失败（站内看着一切正常）。
   if (plan.notifications.length || !recipients.length || (external && external.failed > 0)) {
-    await logAction(null, 'quality_alert', plan.notifications.map((n) => n.kind).join(',') || 'no_recipient', {
+    // userId 传 undefined 表示「系统动作」：logAction 内部本来就 `userId || null` 落库，
+    // 语义与 row 完全一致，只是签名不收 null。
+    await logAction(undefined, 'quality_alert', plan.notifications.map((n) => n.kind).join(',') || 'no_recipient', {
       status: !recipients.length && plan.notifications.length ? 'error' : external && external.failed > 0 ? 'warn' : 'ok',
       detail:
         `issues=${result.issued} suppressed=${result.suppressed} notified=${result.notified} ` +

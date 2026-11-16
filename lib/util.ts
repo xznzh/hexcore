@@ -54,14 +54,17 @@ export function estimateTokens(text: string): number {
  * 用于给「无原生超时」的外部调用（RAG 检索 / 文件读取 / 任意 await）兜底，避免挂死拖垮整条链路。
  */
 export async function withTimeout<T>(p: Promise<T>, ms: number, msg?: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
+  // timer 在 Promise executor 里赋值：executor 是同步执行的，所以下面 finally 里一定已赋值。
+  // 但类型系统看不穿这层闭包，只能标成可能未赋值（开 strictNullChecks 后 TS2454）。
+  // 这里显式允许 undefined 并用 if 收窄，比 `timer!` 更诚实：万一将来 executor 改成异步，清空会跳过而不是崩。
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, rej) => {
     timer = setTimeout(() => rej(new Error(msg || `操作超时（${ms}ms）`)), ms);
   });
   try {
     return await Promise.race([p, timeout]);
   } finally {
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

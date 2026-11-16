@@ -1,10 +1,23 @@
 {
   "compilerOptions": {
     "target": "ES2021",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": false,
+    // 严格模式：strictNullChecks / strictBindCallApply / useUnknownInCatchVariables 等全部开启。
+    //
+    // noImplicitAny 单独关掉，是**有意的分期**，不是遗漏：
+    // 开启后全仓会多出 154 个隐式 any（历史代码里大量未标注的回调参数与 catch 变量），
+    // 而其中绝大多数是"能动就行"的类型噪音，一次性补齐只会产生一大片 `: any` 的假标注，
+    // 反而掩盖真正该收敛的类型。当前先锁住"null/undefined 不可乱塞"这一条——
+    // 它才是真正会变成线上 500 的那类 bug（本次开启即查出 withTimeout 的未赋值定时器等 16 处）。
+    // 待办：逐模块消灭隐式 any 后，删掉这一行。
+    "strict": true,
+    "noImplicitAny": false,
     "noUnusedLocals": false,
     "noEmit": true,
     "esModuleInterop": true,
@@ -14,9 +27,33 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./*"] }
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // 收进来的范围：
+  //  - **/*.mts：vitest.config.mts 等 ESM 配置也要进类型检查（里面用了 import.meta.dirname）
+  //  - .next*/types/**：用通配而非 `.next`，因为本项目支持 NEXT_DIST_DIR 指定构建目录
+  //    （本地想在 dev 开着的情况下验证构建时就会这么做）。
+  // 注意一个已知副作用：`next build` 会按当前 distDir 往 include 里追加
+  // `${distDir}/types/**/*.ts`，用非默认目录构建后这行会被写进工作区。
+  // 它属于构建产物路径，提交前应删掉——否则 tsconfig 会绑死在某个人的临时目录名上。
+  "include": [
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next*/types/**/*.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

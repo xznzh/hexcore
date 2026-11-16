@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { capabilityOperations, capabilities, users } from '@/lib/schema';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { withApi } from '@/lib/api/handler';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +26,9 @@ export const GET = withApi(async ({ req, session }) => {
   const limit = Math.min(200, Math.max(1, Number(sp.get('limit') || 50)));
   const offset = Math.max(0, Number(sp.get('offset') || 0) || 0);
 
-  const conds = [];
+  // 显式标注类型：`const conds = []` 会被推成 never[]/any[]，push 进去的 SQL 条件在
+  // strictNullChecks 下报 TS2345。标注后 and(...conds) 的类型推导也才是对的。
+  const conds: SQL[] = [];
   if (mine) conds.push(eq(capabilityOperations.userId, s.userId));
   if (status) conds.push(eq(capabilityOperations.status, status));
   if (capabilityId) conds.push(eq(capabilityOperations.capabilityId, capabilityId));

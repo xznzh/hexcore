@@ -270,7 +270,9 @@ export default function ConnectorsPage() {
     load();
   }
 
-  function parseHeaders(): Record<string, string> | undefined {
+  // 返回三态：undefined=没填（合法，不传该字段）/ null=填了但不是 JSON 对象（调用方要中止）/ 对象=正常。
+  // 之前签名只写了 `| undefined` 却在 catch 里 return null，调用方的 `=== null` 判断在类型上不成立。
+  function parseHeaders(): Record<string, string> | null | undefined {
     const t = headersText.trim();
     if (!t) return undefined;
     try {
@@ -283,7 +285,7 @@ export default function ConnectorsPage() {
     }
   }
 
-  function parseQuery(): Record<string, string> | undefined {
+  function parseQuery(): Record<string, string> | null | undefined {
     const t = queryText.trim();
     if (!t) return undefined;
     try {

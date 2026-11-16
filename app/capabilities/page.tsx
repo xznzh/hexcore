@@ -1202,7 +1202,7 @@ export default function CapabilitiesPage() {
               <Descriptions.Item label="时间">{new Date(opDetail.createdAt).toLocaleString()}</Descriptions.Item>
             </Descriptions>
             <Text strong>参数</Text>
-            <ResultBlock text={opDetail.input} tone="info" />
+            <ResultBlock text={opDetail.input || ''} tone="info" />
             <Text strong>输出</Text>
             <ResultBlock
               text={opDetail.output || opDetail.error || ''}
