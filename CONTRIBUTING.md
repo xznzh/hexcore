@@ -79,7 +79,7 @@ pnpm check     # = typecheck + lint:ui（界面规范）+ vitest（956 用例）
 这些不是「不好」，是在当前阶段收益不够，提了大概率会被拒，提前说明省得白做：
 
 - **大规模重命名 / 目录重组 / 引入新的分层**。现有 L1–L5 分层是刻意设计的，见 `docs/02-设计/`
-- **全量开 `tsconfig` 的 `strict`**。当前 `strict: false`，存量 `any` 有 442 处，属于已知技术债；**但新代码请尽量不要引入新的 `any`**
+- **全量打开 `noImplicitAny`**。当前 `strict: true`，但 `noImplicitAny: false`，存量隐式 `any` 仍有数百处，属于已知技术债（分期原因写在 `tsconfig.json` 注释里）；**新代码请尽量不要引入新的 `any`**。`strictNullChecks` 已经开启，`null` / `undefined` 不要用 `!` 硬断言绕过去。
 - **引入新框架替换现有选择**（换成 Prisma / 换成 LangChain / 换成 Turborepo 之类），除非有可复现的、现有方案解决不了的问题
 - **纯格式化 PR**（全仓缩进、引号风格），会和现有提交历史冲突
 

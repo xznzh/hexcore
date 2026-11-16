@@ -8,6 +8,15 @@
 - **每一次工具调用都可治理** —— 权限 → 审批 → 超时 → 审计四道关，聊天 / API / 技能 / 定时任务共用同一套。
 - **缺什么就降级什么** —— 没有 Redis、没有 pgvector、没有向量模型、没有模型 Key，系统都能跑，只是能力逐级收缩。
 
+![工作台](docs/assets/work.png)
+
+<p align="center">
+  <img src="docs/assets/chat.png" width="70%" alt="对话：检索 → 引用标注 → 回答" />
+  <img src="docs/assets/knowledge.png" width="28%" alt="知识库：文档、切片与检索测试" />
+</p>
+
+> 以上截图全部来自 `DEMO_MODE=1` 的默认启动状态：没有任何模型 Key、没有额外配置，知识库里的答案与引用都来自本地检索。
+
 [快速开始](#快速开始) · [能力清单](#能力清单) · [治理层](#治理层凭什么不是又一个套壳) · [文档导航](#文档导航)
 
 ---
@@ -95,6 +104,8 @@ pnpm dev
 - 提示注入防护：8 条启发式规则 + `<untrusted_data>` 定界 + 间接注入隔离
 - SSRF 三层防护（字面量 → DNS 解析后逐 IP → 重定向逐跳）、连接器熔断、调用超时
 - traceId 贯穿请求，一次对话的「检索 → 工具 → 模型 → 审批 → 落库」可用一个 id 串起来
+- **`/api/metrics`**：请求量 / 错误率 / 耗时分布、对话首字耗时、token 用量、护栏命中、熔断状态、
+  队列积压（Prometheus 文本格式，零依赖实现）；**熔断状态走 Redis 共享**，多副本不会各自放量
 - 额度与限流、用量趋势、成本看板、操作日志、LLM-as-judge 与 RAG recall@k 自检
 
 ---
@@ -123,7 +134,7 @@ pnpm dev
 
 Next.js 15（App Router）· React 19 · TypeScript · PostgreSQL + Drizzle ORM + pgvector · Redis + BullMQ（可选）· Vercel AI SDK · Ant Design（深色主题）
 
-规模：90 个 API 路由 · 32 张表 · 21 个治理模块 · 47 个 TSX 组件。
+规模：91 个 API 路由 · 32 张表 · 21 个治理模块 · 47 个 TSX 组件。
 
 ## 目录结构
 
@@ -131,7 +142,7 @@ Next.js 15（App Router）· React 19 · TypeScript · PostgreSQL + Drizzle ORM 
 app/
   chat, knowledge, docs, ppt, files, projects, memory, skills,
   connectors, capabilities, schedules, work, admin   页面
-  api/                                              90 个路由，统一走 withApi 鉴权
+  api/                                              91 个路由，统一走 withApi 鉴权（/api/chat、/api/metrics 为特例）
 lib/
   db.ts, schema.ts       PostgreSQL + Drizzle + 自动建表 / 迁移 / 预置模型
   ai/                    模型解析、RAG 检索、分块、向量、重排、记忆、本地演示
@@ -141,28 +152,31 @@ lib/
 evals/                   golden set + 对抗集 + 结构化判定器 + 趋势
 scripts/                 release 流程、文档链接检查、UI 规范检查
 docs/                    7 层文档，见下方导航
-tests/                   67 个测试文件
+tests/                   73 个测试文件
 ```
 
 ---
 
 ## 质量
 
-以下数字由 `pnpm check` 与 `DEMO_MODE=1 pnpm eval` 实测产出（v8.14.0）：
+以下数字由 `pnpm check` 与 `DEMO_MODE=1 pnpm eval` 实测产出（v8.22.0）：
 
 | 项目 | 结果 |
 |---|---|
-| 单元测试 | 67 个文件，**956 用例（949 通过 / 7 跳过）** |
-| 类型检查 | `tsc --noEmit` 0 错误 |
+| 单元测试 | 73 个文件，**995 用例（988 通过 / 7 跳过）** |
+| 类型检查 | `tsc --noEmit` **0 错误**（`strict: true`：`strictNullChecks` 全开） |
+| 代码规范 | ESLint 9（`next/core-web-vitals`）0 error |
 | 界面规范 | 47 个 TSX，0 违规（禁止硬编码颜色、禁止配色表外 Tag） |
-| 文档链接 | 45 个 Markdown，0 断链 |
+| 构建 | `next build` 通过，首屏共享 JS 103 kB |
+| 端到端 | Playwright 5 条冒烟（未登录跳转 / 登录落地 / 对话落待办 / 默认模型可用 / 回答非报错） |
+| 文档链接 | 全部 Markdown 0 断链（`pnpm docs:check`） |
 | RAG 评测 | golden set 38 条，**37/38**（拒答 25/26、检索命中 12/12） |
 | 对抗评测 | **20/20**（提示注入、越权指令、凭据外泄） |
 
-跳过的 8 条是需要真实数据库或真实模型的 e2e，由 `QA_PGVECTOR_E2E=1` / `QA_IDEM_E2E=1` 开关控制，CI 里不跑。
+跳过的 7 条是需要真实数据库或真实模型的 e2e，由 `QA_PGVECTOR_E2E=1` / `QA_IDEM_E2E=1` 开关控制，CI 里不跑。
 
 ```bash
-pnpm check        # typecheck + 界面规范 + 单元测试
+pnpm check        # typecheck + ESLint + 界面规范 + 单元测试
 pnpm eval         # RAG 评测（需模型，或用 DEMO_MODE=1 跑本地）
 pnpm e2e          # Playwright 端到端
 ```
