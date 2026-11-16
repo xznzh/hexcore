@@ -49,7 +49,7 @@ export const POST = withApi(async ({ req, session }) => {
   }
 
   // 「手动测试」是排障动作：先清掉该连接器的熔断状态，否则下游刚修好也测不通（会被熔断直接拦掉）
-  resetCircuit(`connector:${id}`);
+  await resetCircuit(`connector:${id}`);
 
   const result = await callConnector(c, session.userId);
   await logAction(session.userId, 'connector_test', c.name);

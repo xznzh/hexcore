@@ -194,7 +194,7 @@ export async function callConnector(c: ConnectorRow, userId: string, input = '')
     // 熔断：下游连续失败达阈值时快速失败，避免每次调用都白等 15s 超时
     const breakerKey = `connector:${c.id}`;
     try {
-      guardCircuit(breakerKey, c.name);
+      await guardCircuit(breakerKey, c.name);
     } catch (e: any) {
       return String(e?.message || e);
     }
@@ -215,8 +215,8 @@ export async function callConnector(c: ConnectorRow, userId: string, input = '')
         signal: ctrl.signal,
       });
       // 5xx 说明下游自己故障 → 计失败；4xx 说明下游活着（只是请求不对）→ 计成功，不误伤熔断
-      if (res.status >= 500) markCircuitFailure(breakerKey);
-      else markCircuitSuccess(breakerKey);
+      if (res.status >= 500) await markCircuitFailure(breakerKey);
+      else await markCircuitSuccess(breakerKey);
       // 用二进制读取再按 charset 解码：腾讯/新浪行情等接口返回 GBK，直接 text() 会中文乱码
       const buf = await res.arrayBuffer();
       const raw = decodeResponseBody(buf, res.headers.get('content-type') || '');
@@ -228,7 +228,7 @@ export async function callConnector(c: ConnectorRow, userId: string, input = '')
       const text = applyResponseMapping(raw, cfg);
       return `HTTP ${res.status}\n${String(text).slice(0, 4000)}`;
     } catch (e: any) {
-      markCircuitFailure(breakerKey);
+      await markCircuitFailure(breakerKey);
       const msg = e && e.name === 'AbortError' ? 'HTTP 请求超时（15s）' : e?.message || e;
       return `HTTP 请求失败：${msg}`;
     } finally {

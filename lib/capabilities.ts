@@ -445,7 +445,7 @@ export async function callCapability(
   const breakerKey = `connector:${cap.connectorId || conn?.id || 'unknown'}`;
   // 熔断打开（下游连续失败）时直接快速失败，不再白等一个超时周期
   try {
-    guardCircuit(breakerKey, conn?.name || cap.name);
+    await guardCircuit(breakerKey, conn?.name || cap.name);
   } catch (e: any) {
     return { ok: false, status: 0, text: String(e?.message || e), durationMs: 0 };
   }
@@ -458,8 +458,8 @@ export async function callCapability(
       signal: AbortSignal.timeout(timeout),
     });
     // 5xx 说明下游自己故障 → 计失败；4xx 说明下游活着（只是请求不对）→ 计成功，不误伤熔断
-    if (res.status >= 500) markCircuitFailure(breakerKey);
-    else markCircuitSuccess(breakerKey);
+    if (res.status >= 500) await markCircuitFailure(breakerKey);
+    else await markCircuitSuccess(breakerKey);
     const buf = await res.arrayBuffer();
     const raw = decodeResponseBody(buf, res.headers.get('content-type') || '');
     const mapped = applyResponseMapping(raw, mapping);
@@ -472,7 +472,7 @@ export async function callCapability(
       durationMs: Date.now() - started,
     };
   } catch (e: any) {
-    markCircuitFailure(breakerKey);
+    await markCircuitFailure(breakerKey);
     // undici 只抛出 "fetch failed"，真实原因在 cause 里（ENOTFOUND / ECONNREFUSED / 证书错误等）
     const cause = e?.cause?.code || e?.cause?.message || '';
     const base = e?.name === 'TimeoutError' ? `请求超时（${timeout}ms）` : String(e?.message || e);

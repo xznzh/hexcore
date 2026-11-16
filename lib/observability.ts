@@ -4,6 +4,7 @@ import { newId } from './util';
 import { traceTag, getTraceId } from './trace';
 import { generateText } from 'ai';
 import { resolveModelWithFallback } from './llm';
+import { incCounter, observeMs } from './metrics';
 
 /** 可选 Langfuse 上报（配置 LANGFUSE_PUBLIC_KEY/SECRET_KEY 后启用），best-effort。 */
 export async function langfuseTrace(p: { model: string; label: string; ms: number; ok: boolean; error?: string; tokens?: number }) {
@@ -52,6 +53,21 @@ export async function logLlm(p: {
   /** 调用方用户 id；落库到 operation_logs.userId，用于按用户维度归因成本。不传则写 null（保持兼容） */
   userId?: string;
 }): Promise<void> {
+  // 指标（V8.22）：与上面的落库**同一时刻、同一份数据**，两条出口各有用途——
+  // 库里的行用于逐个调用复盘（谁、花了多少、为什么失败），指标用于看趋势与告警。
+  // 只记 `label` 不记模型名：模型名由用户自填，基数不可控，也不该出现在抓取端口上。
+  incCounter('hexcore_llm_calls_total', '模型调用次数（按用途 / 成败）', {
+    label: p.label,
+    ok: p.ok ? 'true' : 'false',
+  });
+  observeMs('hexcore_llm_duration_ms', '模型调用耗时（毫秒）', p.ms, { label: p.label });
+  if (typeof p.tokens === 'number') incCounter('hexcore_llm_tokens_total', '模型 token 用量', { kind: 'total' }, p.tokens);
+  if (typeof p.promptTokens === 'number') {
+    incCounter('hexcore_llm_tokens_total', '模型 token 用量', { kind: 'prompt' }, p.promptTokens);
+  }
+  if (typeof p.completionTokens === 'number') {
+    incCounter('hexcore_llm_tokens_total', '模型 token 用量', { kind: 'completion' }, p.completionTokens);
+  }
   // 埋点写库改为 fire-and-forget：每次对话 / 智能体步骤都经过这里，若 await 会直接叠加在
   // LLM 调用的返回路径上，抬高首字延迟。改为不阻塞——丢失一条 best-effort 观测记录不影响主流程。
   db.insert(operationLogs)

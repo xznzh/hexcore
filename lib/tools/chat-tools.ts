@@ -16,7 +16,7 @@ import {
 } from '../schema';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { retrieve } from '../ai/rag';
-import { runSkill } from '../agent';
+import { runSkillGoverned } from '../agent';
 import { newId, periodNow, logAction } from '../util';
 import { buildPptx } from '../generate';
 import { saveArtifact } from '../artifacts';
@@ -253,8 +253,18 @@ const DEFS: Record<string, ChatToolDef> = {
         // V8 · R3 幂等：同一会话内「相同技能 + 相同输入」只跑一次，避免 streamText 重试重跑工作流烧额度
         const idemKey = makeToolKey(conversationId, 'run_skill', { id: sk.id, input });
         const { value } = await withIdempotency(idemKey, async () => {
-          const { result } = await runSkill(steps, input, sk.modelId, userId);
-          return result;
+          // 技能在对话里被调用，也要按「技能通道」治理一次：它的产出会先进模型上下文、
+          // 再进最终回答。对话层的护栏只管最终那段文本——若技能产出里带了不该外发的内容，
+          // 它已经先一步进了上下文，等于绕过了外发前的最后一道闸。
+          // 走门面而不是裸 runSkill，是为了让「运行即治理」成为默认值，不靠调用方记得。
+          const r = await runSkillGoverned(steps, input, {
+            modelId: sk.modelId ?? undefined,
+            userId,
+            source: 'skill',
+            label: sk.name,
+            question: input,
+          });
+          return r.text;
         });
         return value;
       },

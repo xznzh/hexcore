@@ -6,9 +6,7 @@ import { resolveModelWithFallback } from './llm';
 import { callModel } from './llm-gateway';
 import { runSkill } from './agent';
 import { addUsage, logAction, estimateTokens, newId } from './util';
-import { finalizeChannel, toolOutputsOf } from './agent/answer-guard';
-import { auditChannelAnswer } from './agent/channel-verify';
-import { judgeChannelAnswer } from './agent/runtime-judge';
+import { governChannelAnswer } from './agent/channel-governance';
 import { maybeRunQualityCheck } from './agent/quality-alert';
 import { createNotification } from './notify';
 import { postJson } from './outbound';
@@ -91,7 +89,9 @@ export async function runSchedule(s: ScheduleRow): Promise<string> {
       await recordRun(s.id, 'skipped', null, 'Token 额度已用尽（block 策略），跳过本次运行', startedAt);
       return 'skipped: quota exceeded';
     }
-    const resolved = await resolveModelWithFallback(s.modelId);
+    // s.modelId 允许为 null（未指定模型，走默认）：函数签名是 `modelId?: string`，
+    // null 与 undefined 语义相同，这里显式归一，别让 null 透进去。
+    const resolved = await resolveModelWithFallback(s.modelId ?? undefined);
     const prompt = s.prompt || '';
 
   let out = '';
@@ -156,36 +156,22 @@ export async function runSchedule(s: ScheduleRow): Promise<string> {
   // 用户在收到推送前没有任何机会拦下，所以这里是「最后一道、也是唯一一道」门。
   // V8.4：把通道上下文带进去（任务指令 + 工具产出），不再用空 context——
   // 空 context 会把「照知识库引用」误判成编造引用，见 agent/answer-guard.ts 文件头。
-  const guarded = finalizeChannel(out, {
+  // 出口治理三段（护栏 → 运行时 V 层 → 语义抽查）收进统一门面，顺序与理由见
+  // lib/agent/channel-governance.ts。这条通道最需要它：结论直接进通知与 webhook，
+  // 用户看到之前没有任何人会复核；而「工具失败了但结论写成成功」正是确定性规则
+  // 抓不到、又最伤人的一类（交由 judge 采样兜住，默认关闭）。
+  //
+  // 这里仍用裸 `runSkill` 而不是 `runSkillGoverned`：本通道的产出可能来自技能，
+  // 也可能来自直接 prompt 生成，必须**统一在出口过一次**——两条分支各治一次的话，
+  // 迟早有一条忘了带上下文。
+  const guarded = governChannelAnswer(out, {
     userId: s.ownerId,
     source: 'schedule',
     label: s.name,
     question: prompt,
-    toolOutputs: toolOutputsOf(trajectory),
+    trajectory,
   });
   out = guarded.text;
-
-  // V8.6：运行时 V 层。跑在护栏**之后**，校验的是真正会发出去的那份文本。
-  // 这条通道最需要它：结论直接进通知与 webhook，用户看到之前没有任何人会复核，
-  // 而「这周简报到底有没有编来源」此前在全平台没有任何记录。
-  auditChannelAnswer(
-    { userId: s.ownerId, source: 'schedule', label: s.name },
-    { answer: out, trajectory },
-  );
-  /**
-   * V8.9：语义抽查（judge）。这条通道最值得判：任务是无人值守跑的，
-   * 产出直接进通知与 webhook，而「工具失败了但结论写成成功」正是确定性规则
-   * 抓不到、又最伤人的一类。成本由 `RUNTIME_JUDGE` + 采样 + 日预算三层控制，
-   * 默认关闭；fire-and-forget，不拖住本轮执行。
-   */
-  void judgeChannelAnswer({
-    userId: s.ownerId,
-    channel: 'schedule',
-    label: s.name,
-    question: prompt,
-    answer: out,
-    trace: trajectory,
-  }).catch(() => {});
 
   await db.update(schedules).set({ lastRunAt: Date.now(), lastStatus: status }).where(eq(schedules.id, s.id));
   await recordRun(
@@ -317,6 +303,18 @@ export function startScheduler() {
   }
   // 启动结果必须可见：原实现首次同步失败是静默的，运维只能靠「任务没跑」倒推。
   // 注册数写在日志里，重启后一眼能确认调度器是否真的接管了任务。
+  //
+  // 副本语义必须说清楚：任务执行前用 `sched:<id>` 抢 Redis 锁，无 Redis 时
+  // `tryLock` 恒返回 true（见 lib/redis.ts 的降级注释）——也就是说多副本下
+  // 同一个 cron 会在每个副本各跑一次，重复调模型、重复发通知。
+  // 这不是可以静默接受的默认行为，所以在启动日志里直接点名。
+  if (!process.env.REDIS_URL) {
+    console.warn(
+      '[scheduler] 未配置 REDIS_URL：定时任务没有分布式锁。' +
+        '多副本部署时同一个任务会被每个副本各执行一次（重复计费 / 重复通知）。' +
+        '如需多副本，请配置 Redis，或把副本数固定为 1，或用 SCHEDULER_ENABLED=false 只让一个副本调度。',
+    );
+  }
   syncJobs()
     .then(() => console.log(`[scheduler] 已启动，当前注册 ${jobs.size} 个任务`))
     .catch((e) => console.error('[scheduler] 首次同步失败:', e?.message || e));

@@ -216,7 +216,7 @@ export async function postJson(
   // 用完整 URL 会让熔断形同虚设（每个 key 各失败一次）。
   const circuitKey = `webhook:${safeOrigin(target)}`;
   try {
-    guardCircuit(circuitKey, 'webhook');
+    await guardCircuit(circuitKey, 'webhook');
   } catch (e) {
     if (e instanceof CircuitOpenError) {
       return { ok: false, attempts: 0, skipped: 'circuit_open', error: '接收端连续失败，熔断中（30 秒后重试）' };
@@ -247,7 +247,7 @@ export async function postJson(
         // 逐次计数，而不是「整轮投递算一次」：每次重试都是一次真实的等待
         // （最坏 3×8s 超时），按轮计数会让一个死掉的端点在告警场景下
         // 要 5 轮 ≈ 50 分钟才熔断，期间每轮都白等。
-        markCircuitFailure(circuitKey);
+        await markCircuitFailure(circuitKey);
         if (!isRetryable(res.status)) break; // 4xx：重试只是把同一份错误抄三遍
       } else {
         if (opts.inspect) {
@@ -257,11 +257,11 @@ export async function postJson(
             // HTTP 200 + 业务错误码：不可重试（密钥/URL 失效，重试无意义），
             // 但同样在浪费请求，计入熔断
             lastError = bizError;
-            markCircuitFailure(circuitKey);
+            await markCircuitFailure(circuitKey);
             break;
           }
         }
-        markCircuitSuccess(circuitKey);
+        await markCircuitSuccess(circuitKey);
         return { ok: true, status: res.status, attempts };
       }
     } catch (e: any) {
@@ -272,7 +272,7 @@ export async function postJson(
         // 配置错误不重试、也不计入熔断失败（否则改好配置要等 30 秒）
         return { ok: false, attempts, skipped: 'bad_url', error: redactSensitive(lastError).text.slice(0, 300) };
       }
-      markCircuitFailure(circuitKey);
+      await markCircuitFailure(circuitKey);
     }
 
     if (i < maxAttempts - 1 && isRetryable(lastStatus, lastError)) {

@@ -45,6 +45,7 @@ import {
   guardReplacement,
   type GuardContext,
 } from './output-guard';
+import { incCounter } from '../metrics';
 
 export type ChannelSource = 'skill' | 'schedule' | 'api';
 
@@ -143,6 +144,15 @@ export function finalizeAnswer(
 
   const observe = !channelGuardEnabled();
   if (audit) auditBlock(audit, hit.rule, hit.detail, observe);
+
+  // 指标：拦截次数按通道 + 规则 + 模式拆分。
+  // `mode=observe` 与 `mode=block` 必须分开看——观察模式的计数涨了说明「规则想拦」，
+  // 混在一起会让人误以为线上已经在拦，进而把「为什么用户没看到变化」查错方向。
+  incCounter('hexcore_guardrail_hits_total', '出口护栏命中次数（按通道 / 规则 / 模式）', {
+    source: audit?.source ?? 'unknown',
+    rule: hit.rule,
+    mode: observe ? 'observe' : 'block',
+  });
 
   // 观察模式：只记不拦。**仍然做检测**——否则开关一开，这条通道就再没有任何信号。
   if (observe) {

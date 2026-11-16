@@ -54,6 +54,9 @@ vi.mock('@/lib/redis', () => ({
   tryLock: vi.fn(async () => true),
   releaseLock: vi.fn(async () => undefined),
   extendLock: vi.fn(async () => true),
+  // 熔断器现在是集群共享的（V8.22），会向 lib/redis 要客户端；
+  // 这个文件测的是调度语义，不需要 Redis，故明确返回 null（走本地兜底）。
+  getRedis: () => null,
 }));
 vi.mock('@/lib/util', () => ({
   newId: (p: string) => `${p}_test`,
@@ -207,9 +210,11 @@ describe('定时任务通道：运行时 V 层记账', () => {
     await vi.waitFor(() => expect(evalLogs().length).toBeGreaterThan(0));
     const [, , target, meta] = evalLogs()[0];
     expect(target).toBe('fail');
-    expect(meta.status).toBe('error');
-    expect(meta.detail).toContain('empty_answer');
-    expect(meta.detail).toContain('channel · schedule/每日简报');
+    // 用可选链而不是 `!`：meta 是 logAction 的第 4 个参数（签名上可选）。
+    // 万一它真没传，expect(undefined).toContain 会直接把这个用例判失败——这正是我们要的断言。
+    expect(meta?.status).toBe('error');
+    expect(meta?.detail).toContain('empty_answer');
+    expect(meta?.detail).toContain('channel · schedule/每日简报');
   });
 
   it('声称用了能力但轨迹里没有对应工具 → 记 warn', async () => {
@@ -223,7 +228,7 @@ describe('定时任务通道：运行时 V 层记账', () => {
     await vi.waitFor(() => expect(evalLogs().length).toBeGreaterThan(0));
     const [, , target, meta] = evalLogs()[0];
     expect(target).toBe('pass_with_warn');
-    expect(meta.detail).toContain('ungrounded_capability');
+    expect(meta?.detail).toContain('ungrounded_capability');
   });
 
   it('轨迹里真有 invoke_capability 时不报（说明轨迹确实被传进去了）', async () => {

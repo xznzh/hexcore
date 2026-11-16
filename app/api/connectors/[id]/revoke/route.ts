@@ -21,7 +21,7 @@ export const POST = withApi(
 
     await db.update(connectors).set({ status: 'revoked', enabled: false }).where(eq(connectors.id, id));
     await db.update(capabilities).set({ status: 'revoked', updatedAt: Date.now() }).where(eq(capabilities.connectorId, id));
-    resetCircuit(`connector:${id}`);
+    await resetCircuit(`connector:${id}`);
     await logAction(session.userId, 'connector_revoke', conn.name);
     return NextResponse.json({ ok: true });
   },

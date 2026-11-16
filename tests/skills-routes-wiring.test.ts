@@ -63,7 +63,8 @@ vi.mock('@/lib/projects', () => ({
 vi.mock('@/lib/redis', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/quota', () => ({ checkQuota: vi.fn(async () => ({ exceeded: false })) }));
 vi.mock('@/lib/agent', () => ({
-  runSkill: vi.fn(async () => ({ trajectory: [], result: 'ok' })),
+  // 路由现在走「运行 + 治理」门面：返回体多出 text / guard 两个字段
+  runSkillGoverned: vi.fn(async () => ({ trajectory: [], result: 'ok', text: 'ok', guard: { blocked: false } })),
 }));
 vi.mock('@/lib/capabilities', () => ({
   listCapabilitiesForUser: vi.fn(async () => []),
@@ -363,76 +364,76 @@ describe(`技能域路由接线（${ENTRIES.length} 个入口）`, () => {
     boom.mockRestore();
   });
 
-  // —— V8.4：出口护栏必须带上通道上下文（否则会误伤「照知识库引用」）——
+  // —— 出口治理已收进 `runSkillGoverned` 门面（V8.22）——
+  //
+  // 这里只验「路由的职责」：1) 把通道上下文传进闭包（source / label / question 缺一不可），
+  // 2) 把拦截结果显式透给调用方。治理规则本身（引用白名单、越权、空产出、工具核对）
+  // 由 `tests/channel-governance.test.ts`（真实门面）与 `tests/scheduler-guard.test.ts`
+  // （真实治理 + 假执行器）覆盖——在路由测试里 mock 掉门面后再断言治理细节，
+  // 等于测自己写的 mock。
 
   const SKILL_ROW = { id: 'x1', ownerId: 'u1', scope: 'personal', steps: '[]', name: '周报技能' };
-  /** V 层的审计只在「有问题」时才写，所以「没有 eval_runtime」本身就是一个断言 */
-  const evalLogs = () => vi.mocked(logAction).mock.calls.filter((c) => c[1] === 'eval_runtime');
 
-  it('skills/run：工具产出里有的报告名不算编造引用，产出不被截断', async () => {
+  const governedMock = async () => vi.mocked((await import('@/lib/agent')).runSkillGoverned);
+
+  it('skills/run：把通道上下文传给门面（source / label / question 缺一不可）', async () => {
     vi.mocked(getSession).mockResolvedValue(member);
     dbRows = [SKILL_ROW];
-    const agent = await import('@/lib/agent');
-    vi.mocked(agent.runSkill).mockResolvedValueOnce({
-      trajectory: [
-        { role: 'worker', type: 'tool', tool: 'search_knowledge', prompt: 'p', output: '[周报.docx] 《2025 年度运营报告》留存率 42%' },
-      ],
-      result: '按《2025 年度运营报告》，本周留存率 42%。',
-    } as any);
-    const r = await skillRun.POST(req('/api/skills/run', 'POST', { id: 'x1', input: '汇总周报' }));
-    const body = await r.json();
-    expect(r.status).toBe(200);
-    expect(body.result).toContain('《2025 年度运营报告》');
-    expect(body.guard).toBeUndefined();
-  });
-
-  it('skills/run：无出处的引用被截断，并显式告知调用方被拦过', async () => {
-    vi.mocked(getSession).mockResolvedValue(member);
-    dbRows = [SKILL_ROW];
-    const agent = await import('@/lib/agent');
-    vi.mocked(agent.runSkill).mockResolvedValueOnce({
-      trajectory: [{ role: 'worker', type: 'llm', prompt: 'p', output: '写了点东西' }],
-      result: '据《2025 年中国流浪动物白皮书》，全国有 4000 万只流浪动物。',
-    } as any);
-    const r = await skillRun.POST(req('/api/skills/run', 'POST', { id: 'x1', input: '写宣传文案' }));
-    const body = await r.json();
-    expect(r.status).toBe(200);
-    expect(body.result).not.toContain('《2025 年中国流浪动物白皮书》');
-    expect(body.guard).toEqual({ blocked: true, rule: 'unverified_citation' });
-  });
-
-  // —— V8.6：运行时 V 层同样要覆盖这条通道 ——
-
-  it('skills/run：空产出记 eval_runtime / empty_answer', async () => {
-    vi.mocked(getSession).mockResolvedValue(member);
-    dbRows = [SKILL_ROW];
-    vi.mocked(logAction).mockClear();
-    const agent = await import('@/lib/agent');
-    vi.mocked(agent.runSkill).mockResolvedValueOnce({ trajectory: [], result: '   ' } as any);
+    const run = await governedMock();
+    run.mockClear();
+    run.mockResolvedValueOnce({ trajectory: [], result: 'ok', text: 'ok', guard: { blocked: false } } as any);
 
     await skillRun.POST(req('/api/skills/run', 'POST', { id: 'x1', input: '汇总周报' }));
 
-    await vi.waitFor(() => expect(evalLogs().length).toBeGreaterThan(0));
-    const [, , target, meta] = evalLogs()[0];
-    expect(target).toBe('fail');
-    expect(meta.detail).toContain('channel · skill/周报技能');
-    expect(meta.detail).toContain('empty_answer');
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][1]).toBe('汇总周报');
+    expect(run.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ userId: 'u1', source: 'skill', label: '周报技能', question: '汇总周报' }),
+    );
   });
 
-  it('skills/run：轨迹里有对应工具时不误报「已使用能力」', async () => {
+  it('skills/run：门面判定被拦时，响应里必须带 guard（拦截不能是隐形的）', async () => {
     vi.mocked(getSession).mockResolvedValue(member);
     dbRows = [SKILL_ROW];
-    vi.mocked(logAction).mockClear();
-    const agent = await import('@/lib/agent');
-    vi.mocked(agent.runSkill).mockResolvedValueOnce({
-      trajectory: [{ role: 'worker', type: 'tool', tool: 'invoke_capability', prompt: 'p', output: '{"ok":1}' }],
-      result: '已使用能力：天气查询\n今日晴，18℃。',
+    const run = await governedMock();
+    run.mockResolvedValueOnce({
+      trajectory: [],
+      result: '据《2025 年中国流浪动物白皮书》…',
+      text: '据',
+      guard: { blocked: true, rule: 'unverified_citation' },
     } as any);
 
-    await skillRun.POST(req('/api/skills/run', 'POST', { id: 'x1', input: '查天气' }));
+    const r = await skillRun.POST(req('/api/skills/run', 'POST', { id: 'x1', input: '写宣传文案' }));
+    const body = await r.json();
+    expect(r.status).toBe(200);
+    // 落库/返回的必须是护栏后的文本，而不是原始 result
+    expect(body.result).toBe('据');
+    expect(body.guard).toEqual({ blocked: true, rule: 'unverified_citation' });
+  });
 
-    // 无问题即不写日志；若轨迹没被传进校验器，这里会冒出 ungrounded_capability
-    await new Promise((r) => setTimeout(r, 20));
-    expect(evalLogs()).toEqual([]);
+  it('skills/run：续跑同样走门面，并带上 resume 游标', async () => {
+    vi.mocked(getSession).mockResolvedValue(member);
+    dbRows = [
+      // 同一个替身同时扮演「运行记录」和「技能定义」：本测试的 mock 对每次 select
+      // 返回同一批行，拆成两条反而会让第二次查询拿错对象（看起来像 label 丢了）。
+      {
+        ...SKILL_ROW,
+        skillId: 'x1',
+        input: '汇总周报',
+        resumeIndex: 2,
+        resumePrev: '前序产出',
+        trajectory: '[]',
+      },
+    ];
+    const run = await governedMock();
+    run.mockClear();
+    run.mockResolvedValueOnce({ trajectory: [], result: 'ok', text: 'ok', guard: { blocked: false } } as any);
+
+    await skillRun.POST(req('/api/skills/run', 'POST', { resume: 'r1', input: '汇总周报' }));
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ source: 'skill', label: '周报技能', startIndex: 2, prevInit: '前序产出' }),
+    );
   });
 });

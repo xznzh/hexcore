@@ -78,6 +78,62 @@ describe('源码级防回归', () => {
     expect(/\bfinalizeAnswer\s*\(/.test("import { finalizeChannel } from '@/lib/agent/answer-guard';")).toBe(false);
   });
 
+  it('技能执行必须走治理门面：裸 runSkill 的直接调用需在白名单内', () => {
+    // 踩过的坑（V8.22）：治理原来是「调用方约定」——`skills/run` 与 `scheduler`
+    // 各自把「护栏 + V 层 + judge」装了一遍。两条通道都记得装，所以测试全绿，
+    // 但这靠的是记忆。第三条通道（webhook 触发、workflow 运行）漏装时**不会报错**：
+    // 只是静默地没有审计、没有护栏，而评测只跑已有通道，抓不到这种退化。
+    //
+    // 现在默认入口是 `runSkillGoverned`（运行即治理）；裸 `runSkill` 只留给
+    // 「需要自己组织通道出口」的调用方，且必须在这里登记。新增一行白名单意味着
+    // 「我知道这条通道要自己接治理」——而不是默默忘掉。
+    const exempt = new Set([
+      'lib/agent/index.ts', // 定义处
+      'lib/scheduler.ts', // 产出可能来自直接 prompt，必须统一在出口治理一次
+    ]);
+    const bad: string[] = [];
+    for (const f of [...walk('lib'), ...walk('app')]) {
+      const rel = f.split(path.sep).join('/');
+      if (exempt.has(rel)) continue;
+      const lines = fs.readFileSync(f, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (isCommentLine(line)) return;
+        if (/\brunSkill\s*\(/.test(line)) bad.push(`${rel}:${i + 1}`);
+      });
+    }
+    expect(bad).toEqual([]);
+    // 自检：不能误抓门面本身，也不能漏掉裸调用
+    expect(/\brunSkill\s*\(/.test('const r = await runSkill(steps, input);')).toBe(true);
+    expect(/\brunSkill\s*\(/.test('const r = await runSkillGoverned(steps, input, opts);')).toBe(false);
+  });
+
+  it('治理三段只能出现在统一出口里（禁止在通道里各装一遍）', () => {
+    // 这三个函数必须成组出现，且顺序固定（护栏 → V 层 → judge）。
+    // 散落在各通道里时，「顺序写反」不会报错，只会让日志把护栏的功劳记成模型的过错。
+    // 允许名单只有两处：定义处 + 唯一出口。
+    const allow = new Map<string, string[]>([
+      ['lib/agent/channel-governance.ts', ['finalizeChannel(', 'auditChannelAnswer(', 'judgeChannelAnswer(']],
+      ['lib/agent/answer-guard.ts', ['finalizeChannel(']],
+      ['lib/agent/channel-verify.ts', ['auditChannelAnswer(']],
+      ['lib/agent/runtime-judge.ts', ['judgeChannelAnswer(']],
+    ]);
+    const bad: string[] = [];
+    for (const f of [...walk('lib'), ...walk('app')]) {
+      const rel = f.split(path.sep).join('/');
+      const lines = fs.readFileSync(f, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (isCommentLine(line)) return;
+        for (const call of ['finalizeChannel(', 'auditChannelAnswer(', 'judgeChannelAnswer(']) {
+          if (!line.includes(call)) continue;
+          // import 语句与类型引用不算调用
+          if (/^\s*import\b/.test(line)) continue;
+          if (!(allow.get(rel) || []).includes(call)) bad.push(`${rel}:${i + 1} ${call}`);
+        }
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('运行时 V 层必须走 verifyChannelAnswer，禁止直接调用 verifyAnswer', () => {
     // 踩过的坑（V8.6）：`verifyAnswer` 的入参是 `{ answer, sources, trace }`。
     // 只传 `{ answer }` 不会报错，但两条依赖上下文的规则会立刻失真：

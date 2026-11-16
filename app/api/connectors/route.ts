@@ -113,7 +113,7 @@ export const PATCH = withApi(
     if (rest.visibleRoles) patch.visibleRoles = JSON.stringify(rest.visibleRoles);
     await db.update(connectors).set(patch).where(eq(connectors.id, id));
     // 配置变更后清掉熔断状态：管理员刚改完地址/密钥就该能立即重试，而不是继续吃冷却期
-    resetCircuit(`connector:${id}`);
+    await resetCircuit(`connector:${id}`);
     return NextResponse.json({ ok: true });
   },
   { auth: 'admin' },
@@ -138,7 +138,7 @@ export const DELETE = withApi(
     await db.delete(capabilityGrants).where(and(eq(capabilityGrants.scope, 'connector'), eq(capabilityGrants.targetId, id)));
     await db.delete(capabilities).where(eq(capabilities.connectorId, id));
     await db.delete(connectors).where(eq(connectors.id, id));
-    resetCircuit(`connector:${id}`);
+    await resetCircuit(`connector:${id}`);
     await logAction(session.userId, 'connector_delete', conn.name, {
       detail: `removedCapabilities=${capIds.length}`,
     });

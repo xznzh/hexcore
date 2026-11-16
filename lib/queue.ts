@@ -13,6 +13,8 @@ let queue: Queue | null = null;
 let worker: Worker | null = null;
 let workerStarted = false;
 let bullConn: ReturnType<typeof getBullConnection> = null;
+/** 只为读积压数而存在的 Queue 实例（不能借 setup()：那会顺手把 Worker 也启起来） */
+let metricsQueue: Queue | null = null;
 
 /** Redis 连通性探测结果与探测时间（Redis 未启动时不做无谓的队列连接，避免任务被静默吞掉） */
 let redisUsable: boolean | null = null;
@@ -140,6 +142,34 @@ export async function enqueueIndex(docId: string): Promise<void> {
 }
 
 /**
+ * 读取文档索引队列的积压情况（供 `/api/metrics` 抓取）。
+ *
+ * 为什么单独开一个 Queue：`setup()` 会在同一次调用里把 Worker 也启起来，
+ * 而抓取指标是只读动作，不该顺带消费任务。这里复用连接、懒建实例、只读计数。
+ *
+ * 返回 null 表示「队列本次不可用」——不是 0。两者语义完全不同：
+ * 0 是「没有积压」，null 是「不知道」。指标侧必须能区分，否则 Redis 挂掉时
+ * 面板会显示一条漂亮的零线，把故障装饰成健康。
+ */
+export async function queueDepth(): Promise<Record<'waiting' | 'active' | 'failed' | 'delayed', number> | null> {
+  if (!(await isQueueUsable())) return null;
+  if (!bullConn) bullConn = getBullConnection();
+  if (!bullConn) return null;
+  if (!metricsQueue) metricsQueue = new Queue('document-index', { connection: bullConn as any });
+  try {
+    const c = await metricsQueue.getJobCounts('waiting', 'active', 'failed', 'delayed');
+    return {
+      waiting: Number(c.waiting || 0),
+      active: Number(c.active || 0),
+      failed: Number(c.failed || 0),
+      delayed: Number(c.delayed || 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 优雅关闭：先停 Worker（等手上这一条索引跑完），再断 Queue 与专用连接。
  *
  * 顺序不能反：先断连接会让正在跑的 job 直接抛错，BullMQ 会把它标记为 stalled，
@@ -148,9 +178,11 @@ export async function enqueueIndex(docId: string): Promise<void> {
 export async function closeQueue(): Promise<void> {
   const w = worker;
   const q = queue;
+  const mq = metricsQueue;
   const conn = bullConn;
   worker = null;
   queue = null;
+  metricsQueue = null;
   bullConn = null;
   workerStarted = false;
 
@@ -162,6 +194,7 @@ export async function closeQueue(): Promise<void> {
     ]);
   }
   if (q) await q.close().catch(() => {});
+  if (mq) await mq.close().catch(() => {});
   if (conn) {
     try {
       await conn.quit();
