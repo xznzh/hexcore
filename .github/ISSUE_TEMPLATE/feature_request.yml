@@ -1,0 +1,59 @@
+name: 功能建议
+description: 提出一个新能力，或对现有行为提出改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提之前建议先看一眼 [docs/02-设计/可观测性与熔断.md](../blob/main/docs/02-设计/可观测性与熔断.md) 结尾的
+        **「刻意不做的三件事」**——多租户、OpenAPI 契约、把沙箱当安全边界，
+        这三项是产品定位上的取舍而非遗漏，提之前值得先了解理由。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的场景
+      description: 先说场景和卡点，再说想要的方案。只写方案容易做成「加一个按钮」，但解决不了真问题。
+      placeholder: |
+        团队里新人想用知识库，但只能看到公共库，
+        没法把某个文档只共享给项目组。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      description: 界面 / 接口 / 数据模型层面的设想都可以，不用很完整。
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过的替代做法
+      description: 比如「现在用标签硬凑」——为什么不够用。
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响面
+      description: 帮我判断这是小改还是需要设计。
+      options:
+        - 界面调整（不动数据模型）
+        - 单个功能（新增表/接口，不影响其他模块）
+        - 涉及多个模块（对话 / 知识库 / 技能 / 权限至少两个）
+        - 架构层（部署形态、多租户、对外接口契约）
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我搜过已有 issue 与文档，没有重复
+          required: true

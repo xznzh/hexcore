@@ -1,5 +1,11 @@
 # Hexcore
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520.9-339933.svg)](package.json)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B%20%2B%20pgvector-336791.svg)](docker-compose.yml)
+[![Deploy](https://img.shields.io/badge/deploy-docker%20compose-2496ED.svg)](docker-compose.yml)
+
 > 面向小团队的 AI Agent 平台，可完全私有化部署。对话、RAG 知识库、技能编排、能力网关、定时任务，全部跑在你自己的 PostgreSQL 上。
 
 三条先看：

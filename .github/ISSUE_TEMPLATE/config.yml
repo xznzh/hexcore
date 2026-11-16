@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（请不要开 public issue）
+    url: https://github.com/XiaoZuiNiZhenHao/hexcore/security/advisories/new
+    about: 漏洞报告走私密渠道，公开 issue 会让所有已部署实例在修复前暴露。
+  - name: 部署与排障文档
+    url: https://github.com/XiaoZuiNiZhenHao/hexcore/blob/main/docs/00-快速开始.md
+    about: 六类常见故障（登录掉线 / 连不上库 / 提问无结果 / 端口占用 …）先看这里。
+  - name: 设计取舍与「刻意不做的事」
+    url: https://github.com/XiaoZuiNiZhenHao/hexcore/blob/main/docs/02-设计/可观测性与熔断.md
+    about: 多租户、OpenAPI 契约、沙箱边界为什么不做，理由都写在这里。
