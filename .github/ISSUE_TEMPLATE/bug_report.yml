@@ -32,7 +32,7 @@ body:
     attributes:
       label: 版本
       description: 填 `package.json` 里的 version，或 git commit 短哈希。
-      placeholder: "8.22.0 / 67ca1f4"
+      placeholder: "1.0.0 / git rev-parse --short HEAD"
     validations:
       required: true
 

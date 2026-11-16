@@ -178,7 +178,7 @@ export default function AdminPage() {
       setLogsTotal(rows.length);
       setTraceMode(true);
     }
-    if (Array.isArray(rows) && rows.length === 0) message.info('这条链路没有日志：id 不存在，或产生于 v8.10 之前（那时 trace 只写在 detail 里）');
+    if (Array.isArray(rows) && rows.length === 0) message.info('这条链路没有日志：id 不存在，或产生于更早的版本（那时 trace 只写在 detail 里）');
   }
 
   // 成本看板：聚合 operation_logs 真实 token（O12 落地），覆盖 chat / 引擎 / 记忆 / 调度全路径。

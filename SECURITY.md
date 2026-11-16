@@ -6,8 +6,6 @@
 
 首选方式：通过 **GitHub 的私密漏洞报告**（本仓库 Security 标签页 → Report a vulnerability）。这条渠道只有维护者可见，且支持在修复发布前保持私密。
 
-若你通过镜像站（Gitee）访问本仓库，也可以私信维护者，标题注明 `SECURITY`。
-
 报告里请尽量包含：
 
 1. 受影响的版本（`package.json` 里的 version 或 tag）

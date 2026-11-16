@@ -1,7 +1,8 @@
 # Hexcore
 
+[![CI](https://github.com/xznzh/hexcore/actions/workflows/ci.yml/badge.svg)](https://github.com/xznzh/hexcore/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520.9-339933.svg)](package.json)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.12-339933.svg)](package.json)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B%20%2B%20pgvector-336791.svg)](docker-compose.yml)
 [![Deploy](https://img.shields.io/badge/deploy-docker%20compose-2496ED.svg)](docker-compose.yml)
@@ -34,7 +35,7 @@
 ### 一行 Docker（推荐第一次试用）
 
 ```bash
-git clone https://gitee.com/XiaoZuiNiZhenHao/hexcore.git
+git clone https://github.com/xznzh/hexcore.git
 cd hexcore
 echo "APP_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d --build
@@ -160,7 +161,8 @@ lib/
   auth.ts, crypto.ts, ssrf.ts, guardrails.ts, resilience.ts
 evals/                   golden set + 对抗集 + 结构化判定器 + 趋势
 scripts/                 release 流程、文档链接检查、UI 规范检查
-docs/                    7 层文档，见下方导航
+docs/                    分层文档：需求 / 设计 / 迭代 / 规范 / 手册，见下方导航
+designs/                 面向未来的架构提案（未实现或部分实现），实施后落到 docs/03-迭代/
 tests/                   73 个测试文件
 ```
 
@@ -168,7 +170,7 @@ tests/                   73 个测试文件
 
 ## 质量
 
-以下数字由 `pnpm check` 与 `DEMO_MODE=1 pnpm eval` 实测产出（v8.22.0）：
+以下数字由 `pnpm check` 与 `DEMO_MODE=1 pnpm eval` 实测产出（v1.0.0）：
 
 | 项目 | 结果 |
 |---|---|
@@ -215,13 +217,18 @@ pnpm e2e          # Playwright 端到端
 
 ```bash
 pnpm hooks:install            # 随 pnpm install 自动装
-pnpm release:start 8.15.0     # 从 main 切 release 分支并同步版本号
+pnpm release:start 1.1.0      # 从 main 切 release 分支并同步版本号
 pnpm release:check            # 门禁：typecheck + 界面规范 + 单测 + 文档链接
-pnpm release:finish 8.15.0    # 合回 main、打 tag、删分支
+pnpm release:finish 1.1.0     # 合回 main、打 tag、删分支
 ```
 
-维护者由 [`.release-owner`](.release-owner) 指定。完整规则（分支命名、MR、多人协作、版本号口径）见 [`docs/04-规范/Git分支与发布规范.md`](docs/04-规范/Git分支与发布规范.md)。
+维护者由 [`.release-owner`](.release-owner) 指定。完整规则（分支命名、PR、多人协作、版本号口径）见 [`docs/04-规范/Git分支与发布规范.md`](docs/04-规范/Git分支与发布规范.md)。
+
+## 认可这个项目
+
+如果它帮你省下了搭一套「RAG + 工具治理 + 全链路降级」的时间，**点个 Star** 是成本最低的支持方式——
+这也是这个项目还在被维护的唯一信号。发现缺陷或想加能力，欢迎开 Issue / PR（流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)）。
 
 ## 许可
 
-[Apache License 2.0](LICENSE) © 2026 XiaoZuiNiZhenHao
+[Apache License 2.0](LICENSE) © 2026 xznzh

@@ -34,7 +34,7 @@ description: 开版本分支、提交前自检、合并回 main 并打 tag。涉
 ```bash
 pnpm release:status                  # 确认当前分支与工作区
 pnpm hooks:install                   # 若 core.hooksPath 为空，每个 clone 一次
-pnpm release:start 7.6.0             # 版本号由用户确认，禁止自行编造
+pnpm release:start 1.1.0             # 版本号由用户确认，禁止自行编造
 ```
 
 - 已在 `release/vX.Y.Z` 且版本一致 → 不要重复开分支。
@@ -69,10 +69,10 @@ pnpm release:check
 
 ```bash
 git fetch origin
-git switch -c feature/<主题> origin/release/v7.7.0   # 从当前 release 切，不从 main 切
+git switch -c feature/<主题> origin/release/v1.2.0   # 从当前 release 切，不从 main 切
 # 开发、提交、pnpm release:check
 git push -u origin feature/<主题>
-# 网页开 MR：feature/<主题> → release/v7.7.0
+# 网页开 MR：feature/<主题> → release/v1.2.0
 ```
 
 - 不合并 MR、不推 `main`、不打 tag、不改 `package.json` 的 version。
@@ -90,16 +90,16 @@ pnpm release:notes                   # 先把发布说明给用户看
 **未开保护分支**（本地合并）：
 
 ```bash
-pnpm release:finish 7.6.0            # 默认交互确认；不要自动加 --yes
+pnpm release:finish 1.1.0            # 默认交互确认；不要自动加 --yes
 ```
 
 **已开保护分支 / 走 MR**（推荐）：
 
 ```bash
-git push -u origin release/v7.6.0    # 推分支
-# 在 Gitee 网页开 MR 合入 main，等合并完成
+git push -u origin release/v1.1.0    # 推分支
+# 在 GitHub 网页开 PR 合入 main，等合并完成
 git switch main && git pull --ff-only
-pnpm release:tag 7.6.0 --push        # 只打 tag，不推送 main
+pnpm release:tag 1.1.0 --push        # 只打 tag，不推送 main
 ```
 
 - 不要在开了保护分支后跑 `finish --push`：远端会拒绝直接推 main，脚本会停在推送这一步。
@@ -107,14 +107,14 @@ pnpm release:tag 7.6.0 --push        # 只打 tag，不推送 main
 - tag 只由维护者创建并推送；非维护者连推 tag 都会被 `pre-push` 拦。
 - 用户说「发版 / 合并 / 打 tag / 推上去」都算同意；只说「继续」不算。
 - 用户要求推送才加 `--push`；网络或权限失败时把恢复命令原样给用户，不要强推。
-- 合并后确认：`git tag --list "v7.6.*"`、`git log --oneline -3`、release 分支已删除。
+- 合并后确认：`git tag --list "v1.1.*"`、`git log --oneline -3`、release 分支已删除。
 - 在 MR 描述里贴：本轮目标、门禁结果、影响面、回滚方式（`git revert <merge-sha>`）。
 
 ## 热修
 
 ```bash
-git switch --detach v7.6.0
-git switch -c hotfix/v7.6.1
+git switch --detach v1.1.0
+git switch -c hotfix/v1.1.1
 # 只改 bug + 补一条回归用例
 pnpm release:check
 ```

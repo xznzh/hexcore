@@ -1,7 +1,10 @@
-# Git 分支与发布规范（V8.10 修订）
+# Git 分支与发布规范
 
 > 一句话：**`main` 只负责「发布」，`release/*` 负责「干活」；每次迭代一条 release 分支，验收全绿后 `--no-ff` 合回 main 并打 tag。**
 > 本文是分支操作的**唯一依据**；`README.md` 只留入口，`.opencode/skills/git-release/` 负责让 AI 按本文自动执行，`.githooks/` 负责在你违规时拦住你。
+>
+> **托管平台**：GitHub（`github.com/xznzh/hexcore`）是**唯一仓库**，Issue / PR / 发版都在这里，不做多站同步。
+> 下文出现的 **PR / MR 是同一件事**，统一读作 PR；权限配置见 §11.6。
 
 ## 0. 先修正原方案里的 3 个逻辑矛盾
 
@@ -25,8 +28,8 @@
 ```
 main      ●────────────────●────────────────●──────────▶  只合并 + 打 tag
            \              /                /
-release/v7.5 ●──●──●──●──●   (开发/自测/验收)   /
-                                  hotfix/v7.5.1 ●──●
+release/v1.0 ●──●──●──●──●   (开发/自测/验收)   /
+                                  hotfix/v1.0.1 ●──●
 ```
 
 ## 2. 一轮迭代的标准动作
@@ -35,8 +38,8 @@ release/v7.5 ●──●──●──●──●   (开发/自测/验收)   
 # 0) 一次性：钩子随 pnpm install 自动安装；也可手动重装
 pnpm hooks:install
 
-# 1) 从 main 切出版本分支，并自动把 package.json 的 version 改成 7.6.0
-pnpm release:start 7.6.0
+# 1) 从 main 切出版本分支，并自动把 package.json 的 version 改成 1.1.0
+pnpm release:start 1.1.0
 
 # 2) 正常开发 —— 反复提交（钩子会拦住「在 main 提交」并自动跑类型检查）
 git add -A && git commit -m 'feat(chat): 支持停止生成'
@@ -45,25 +48,25 @@ git add -A && git commit -m 'feat(chat): 支持停止生成'
 pnpm release:check
 
 # 4A) 仓库未开保护分支时：本地合并 + 打 tag + 推 main
-pnpm release:finish 7.6.0          # 交互式确认
-pnpm release:finish 7.6.0 --yes --push   # 无人值守（CI/Agent 需用户明确授权后才可用）
+pnpm release:finish 1.1.0          # 交互式确认
+pnpm release:finish 1.1.0 --yes --push   # 无人值守（CI/Agent 需用户明确授权后才可用）
 
 # 4B) 已开保护分支时（hexcore 当前状态，必须走这条）：
-git push -u origin release/v7.6.0  # 推送后在 Gitee 开 MR 合入 main
+git push -u origin release/v1.1.0  # 推送后在网页开 PR/MR 合入 main
 git switch main && git pull --ff-only
-pnpm release:tag 7.6.0 --push      # 在 main 的合并提交上打 tag 并推送
+pnpm release:tag 1.1.0 --push      # 在 main 的合并提交上打 tag 并推送
 
 # 5) 生成发布说明（粘贴到 MR / 群里）
 pnpm release:notes
 ```
 
-> 第 4A 步做的事：`checkout main` → `pull --ff-only` → `merge --no-ff` → `tag -a v7.6.0` → 推 main 和 tag → 删本地与远端 `release/*`。
+> 第 4A 步做的事：`checkout main` → `pull --ff-only` → `merge --no-ff` → `tag -a v1.1.0` → 推 main 和 tag → 删本地与远端 `release/*`。
 > 第 4B 步只打 tag，不碰 main。
 >
 > ⚠️ **开了保护分支之后不要再用 `release:finish --push`。** 如果保护规则是「标准模式」，它会被远端拒绝；
 > 如果开了「评审模式」，后果更隐蔽——**推送不会报错（退出码 0），而是被静默转成一个 MR**，
 > 同时本地 `main` 已经合并了那个版本，和远端分叉。两种都不是你要的结果。
-> 判断标志：命令看起来成功了，但远端 `main` 的 SHA 没变，Gitee 的 PR 列表里多出一条。
+> 判断标志：命令看起来成功了，但远端 `main` 的 SHA 没变，平台的 PR 列表里多出一条。
 > 任何一步失败都会停下，不会留下「半个版本」。
 
 ## 3. 门禁：三道防线，各管一段
@@ -72,7 +75,7 @@ pnpm release:notes
 |---|---|---|---|
 | 本地防呆 | `.githooks/pre-commit`、`commit-msg`、`pre-push` | 能（`--no-verify`） | 在 main 提交/推送、提交信息不规范、强推覆盖远端时**立刻报错并给出正确做法** |
 | 合并前自检 | `pnpm release:check` | 不能（脚本返回非 0 即失败） | 把「测试没毛病」变成可执行的标准，而不是口头判断 |
-| 远端强制 | Gitee 仓库 → 管理 → 保护分支设置 + 分支状态设为「保护分支」 | 不能 | 禁止直推/强推/删除 `main`，合并只能由维护者在 MR 里点（配置与实测见 §11.6） |
+| 远端强制 | GitHub Rulesets（见 §11.6） | 不能 | 禁止直推/强推/删除 `main`，合并只能由维护者在 PR 里点 |
 
 > 本地钩子默认拦截所有推送到 `main` 的请求，**只对 `pnpm release:finish --push` 放行**（脚本会带授权标记）；
 > 手工 `git push origin main` 一律被拒，这就是「唯一发布通道」的落地方式。
@@ -87,12 +90,16 @@ pnpm release:notes
 ## 4. 合并与打 tag 的硬规则
 
 1. **合并方式**：`git merge --no-ff`。保留「这一版从哪开始、包含哪些提交」的边界；禁止 squash 成一坨，否则 tag 回溯没有意义。
-2. **tag 格式**：`vMAJOR.MINOR.PATCH`（如 `v7.6.0`），**annotated tag**，与 `package.json` 的 `version` 完全一致。
+2. **tag 格式**：`vMAJOR.MINOR.PATCH`（如 `v1.1.0`），**annotated tag**，与 `package.json` 的 `version` 完全一致。
 3. **tag 打在 main 的合并提交上**，不在 release 分支上打。
-4. **tag 只增不改**：发错了就发新补丁版（`v7.6.1`），禁止 `tag -f` 覆盖已推送的 tag。
+4. **tag 只增不改**：发错了就发新补丁版（`v1.1.1`），禁止 `tag -f` 覆盖已推送的 tag。
 5. 合并后删除 release 分支；历史与代码都在 main + tag 里，分支留着只会让人误以为还在开发。
 
 ## 5. 版本号语义与发布节奏
+
+> **两套编号，别混用**：`v1.0.0` 起的**语义化版本**（git tag / `package.json` / 发布说明）；
+> 以及公开首发前的**内部迭代号** `v2 ~ v8.22`（只出现在 [`docs/03-迭代/`](../03-迭代/README.md) 的篇名与正文里，
+> 用来区分「那一轮在解决什么问题」）。对外发布从 `v1.0.0` 重新起算，本节以下案例中的 `v8.x` 全是内部号。
 
 > 2026-11 修订：原来这里只有一句「破坏性变更 / 大改版 → 升 MAJOR」，回答不了「改得多算不算大改版」，
 > 所以每次发版都要临场判断，判断完还只留在那一版的记录里。本节把它拆成可逐条核对的触发条件。
@@ -148,9 +155,9 @@ pnpm release:notes
 
 | 用途 | 写法 | 例子 |
 |---|---|---|
-| Git tag / package.json / 发布说明 | 语义化版本 `X.Y.Z` | `8.10.0` |
-| 文档里的迭代批次 | `V8.10`（仅作文档目录名与标题） | `优化记录-v8.10-xxx.md` |
-| 破坏性变更 / 主题换代 | 升 MAJOR | `9.0.0` |
+| Git tag / package.json / 发布说明 | 语义化版本 `X.Y.Z` | `1.1.0` |
+| 文档里的迭代批次 | `V8.10`（仅作文档目录名与标题，首发前的内部号） | `优化记录-v8.10-xxx.md` |
+| 破坏性变更 / 主题换代 | 升 MAJOR | `2.0.0` |
 
 `release:start` 会同步改 `package.json`，所以 tag 与版本号不会漂移。文档迭代号与 tag 的对应关系
 写进 `docs/03-迭代/` 对应记录与 `CHANGELOG.md` 的文首即可。
@@ -158,11 +165,11 @@ pnpm release:notes
 ## 6. 线上紧急修复（hotfix）
 
 ```bash
-git switch --detach v7.6.0          # 从出问题的 tag 切，不在 main 上改
-git switch -c hotfix/v7.6.1
+git switch --detach v1.1.0          # 从出问题的 tag 切，不在 main 上改
+git switch -c hotfix/v1.1.1
 # 修复 + 只提交修复相关改动
 pnpm release:check
-# 合回 main、打 v7.6.1，并把修复同步回当前 release（如果还在开发）
+# 合回 main、打 v1.1.1，并把修复同步回当前 release（如果还在开发）
 ```
 
 hotfix 只修 bug，不夹带新功能；修完必须补一条回归用例（`tests/` 或 `evals/`），否则同类问题会再犯。
@@ -180,7 +187,8 @@ hotfix 只修 bug，不夹带新功能；修完必须补一条回归用例（`te
 
 ## 8. master → main 迁移（已完成）
 
-**状态（2026-10-29）**：Gitee 默认分支已改为 `main`，远端只剩 `refs/heads/main`，旧 `master` 已删除，标签从 `v7.6.0` 起。
+**状态（2026-10-29）**：托管平台默认分支已改为 `main`，远端只剩 `refs/heads/main`，旧的 `master` 已删除。
+对外发布的 tag 从 `v1.0.0` 起；首发前那些内部迭代号没有打 tag，只留在 `docs/03-迭代/` 的记录里。
 
 **其他同事的本地仓库**（迁移后一次性执行）：
 
@@ -202,7 +210,7 @@ git remote set-head origin -a
 | 新人一眼看懂怎么参与 | `README.md` + 本文 | README 放 5 行摘要和链接，细节只在本文维护，避免两处不一致 |
 | AI 每次自动按流程做 | `.opencode/skills/git-release/SKILL.md` | 说「发版/开分支/合并」时自动加载，按本文步骤执行并做前置校验 |
 | 违规时立刻被拦住 | `.githooks/` + `pnpm hooks:install` | `pnpm install` 的 `prepare` 会自动装；`--no-verify` 能绕，但会被下一层兜住 |
-| 绕过本地也能兜住 | Gitee 保护分支 + MR | 远端强制，唯一真正不可绕过的层 |
+| 绕过本地也能兜住 | 保护分支 + PR | 远端强制，唯一真正不可绕过的层 |
 | 操作不用记命令 | `scripts/release.mjs` | `start / check / finish / tag / notes` 子命令，失败即停 |
 
 ## 10. 常见错误处理
@@ -239,7 +247,7 @@ git remote set-head origin -a
 
 ```
 main                                  ← 只有维护者能合并、打 tag
- └── release/v7.7.0                   ← 维护者开，决定这一版收什么
+ └── release/v1.2.0                   ← 维护者开，决定这一版收什么
       ├── feature/zhang-chat-stop     ← 同事 A，从 release 切
       └── feature/li-rag-rerank       ← 同事 B，从 release 切
 ```
@@ -251,17 +259,17 @@ main                                  ← 只有维护者能合并、打 tag
 ### 11.3 贡献者（非维护者）步骤
 
 ```bash
-git clone https://gitee.com/XiaoZuiNiZhenHao/hexcore.git
+git clone https://github.com/xznzh/hexcore.git
 cd hexcore
 pnpm install && pnpm hooks:install
 
 git fetch origin
-git switch -c feature/zhang-chat-stop origin/release/v7.7.0   # 从当前 release 切
+git switch -c feature/zhang-chat-stop origin/release/v1.2.0   # 从当前 release 切
 # 开发、提交、自检
 pnpm release:check
 
 git push -u origin feature/zhang-chat-stop
-# 在 Gitee 网页开 MR：源 feature/zhang-chat-stop → 目标 release/v7.7.0
+# 在网页开 PR/MR：源 feature/zhang-chat-stop → 目标 release/v1.2.0
 ```
 
 贡献者**不要做**：
@@ -274,25 +282,25 @@ git push -u origin feature/zhang-chat-stop
 
 ```bash
 # 1) 收 feature MR
-git switch release/v7.7.0 && git pull --ff-only
+git switch release/v1.2.0 && git pull --ff-only
 # 在网页审查并合并 feature MR（或本地 merge --no-ff 后推送）
 
 # 2) 整条 release 验收
 pnpm release:check
-git push -u origin release/v7.7.0
+git push -u origin release/v1.2.0
 
 # 3) 合入 main：开了保护分支就走 MR
-#    网页开 MR：release/v7.7.0 → main，合并
+#    网页开 MR：release/v1.2.0 → main，合并
 git switch main && git pull --ff-only
-pnpm release:tag 7.7.0 --push        # 只有维护者能执行
+pnpm release:tag 1.2.0 --push        # 只有维护者能执行
 
 # 4) 收尾：删除 release 分支，发通知
 pnpm release:notes
 ```
 
-若仓库**没开**保护分支，第 3 步可改用 `pnpm release:finish 7.7.0 --push`。
+若仓库**没开**保护分支，第 3 步可改用 `pnpm release:finish 1.2.0 --push`。
 
-### 11.5 MR 审查清单（维护者逐条看）
+### 11.5 PR 审查清单（维护者逐条看）
 
 - [ ] 目标分支正确：feature → `release/*`，release → `main`，没有跨层直合。
 - [ ] 改动范围与 MR 标题一致，没有顺手夹带重构 / 格式化 / 无关文件。
@@ -303,48 +311,87 @@ pnpm release:notes
 - [ ] UI 改动附截图，并符合 [`界面开发规范.md`](./界面开发规范.md)。
 - [ ] 写清回滚方式（通常是 `git revert <merge-sha>`）。
 
-### 11.6 保护分支配置（Gitee 网页）
+### 11.6 保护分支与 tag（GitHub Rulesets）
 
-分两步，**缺第二步等于没配**：
+目标一句话：**别人只能提 PR，合并和打 tag 只有维护者能做。**
 
-**第一步：建规则**（仓库 → 管理 → 保护分支设置 → 新建规则）
+#### 0. 先想清楚「别人」是什么身份
 
-| 配置项 | 推荐值 | 说明 |
+| 身份 | 在公开仓库里能做什么 | 要不要给 |
 |---|---|---|
-| 分支名称 | `main` | 必要时连 `release/*` 一起护 |
-| 可推送代码成员 | **禁止任何人** | 选「仅维护者」时维护者自己仍能直推，想连自己一起锁死就选这个 |
-| 可合并 Pull Request 成员 | 仅维护者 | 决定谁能点合并按钮 |
-| 评审模式 | **开启** | 无推送权限者的推送会**自动转成 MR**，而不是报错把代码弹回去 |
-| 合并方式 | 保留合并提交（`--no-ff`） | 不要 squash，否则 tag 回溯失去意义 |
-| 合并后删除源分支 | 开启 | feature / release 都适用 |
+| 陌生人（未受邀） | fork → 在自己仓库改 → 向你的 `main` 提 PR。**没有写权限，推不进来** | 默认如此，无需配置 |
+| 协作者 `Read` | 能看私有内容、能提 PR，不能推 | 私有仓库才需要 |
+| 协作者 `Write` | **能直接推分支**；`main` 受保护后被拦，但仍能推 `feature/*` | 信任的同事才给 |
+| 协作者 `Admin` / `Maintain` | 能改仓库设置，**等于把仓库交出去** | **永远不给** |
 
-**第二步：把分支状态改成「保护分支」**
+所以对单人维护的项目，最省事也最安全的形态是：**一个协作者都不加**。公开仓库天然支持 fork + PR，谁都能贡献，但谁都不能合并。
 
-代码 → 分支 → 管理 → 找到 `main` → 分支状态：常规分支 → **保护分支**。
+#### 1. 保护 `main`：Settings → Rules → Rulesets → New ruleset → New branch ruleset
 
-> ⚠️ **这一步最容易漏，漏了规则完全不生效。** Gitee 的规则是「条文」，分支状态是「这颗分支受不受条文管」。
-> 判据只有一个：回到保护分支设置页，规则那行必须显示**「作用于 1 个分支」**。
-> 显示「作用于 0 个分支」并被标红「规则没有生效?」时，规则就是一张废纸。
-
-#### 配好之后的行为（2026-11-13 实测）
-
-| 尝试动作 | 服务端回执 | `main` 是否变化 |
+| 配置项 | 值 | 为什么 |
 |---|---|---|
-| 推普通分支 `feature/*` | 成功，并提示可创建 MR | 不涉及 |
-| 直推 `main` | `Cannot push to a protected branch 'refs/heads/main' directly`，自动建 MR | 否 |
-| 强推 `main`（`--force`） | `Target branch is in review mode`，转投 `auto/main/...` 评审分支 | 否 |
-| 删除 `main`（`git push origin :main`） | `The protected branch does not allow deletion`，`pre-receive hook declined` | 否 |
+| Ruleset Name | `protect-main` | — |
+| Enforcement status | **Active** | 设成 Disabled 等于没建 |
+| Target branches | **Include default branch** | 新增分支不会被漏掉 |
+| Restrict deletions | 勾 | 禁止 `git push origin :main` |
+| Block force pushes | 勾 | 禁止 `--force` 改写历史 |
+| **Require a pull request before merging** | 勾 | 核心开关：直推被拒 |
+| Required approvals | **0** | ⚠️ 单人维护时设 1 会**把你自己也卡死**——GitHub 不允许批准自己开的 PR |
+| Require status checks to pass | 勾，选 CI 的 `门禁` | 没门禁的 PR 按不了合并按钮；**要先让 CI 跑过一次，这个 check 才会出现在列表里** |
+| Require branches to be up to date before merging | 勾 | 合并前必须 rebase 到最新 main，避免「本地过了、合进去挂了」 |
+| **Bypass list** | **只加你自己** | 见下 |
 
-三种拦法强度不同：**删除是硬拒绝**（连试都不许），推送和强推是「引流成 MR」。所以判断保护是否生效，不要看命令成功与否（评审模式下推送的退出码是 0），**要看远端 `main` 的 SHA 有没有变**。
+**Bypass list 是这套配置里唯一需要想清楚的地方**：
 
-> 保护分支只管 `refs/heads/*`，**管不到 tag**。谁都能推 tag，服务端没有对应开关，只能靠本地 `pre-push` 钩子拦（可被 `--no-verify` 绕过）。
+- 把你加进去 → 别人只能提 PR；你仍然可以本地 `pnpm release:finish <版本> --push` 直推 `main`（本项目的发布流程依赖这条，
+  见 §2 的 4A）。这是单人项目最实用的组合。
+- 不加你 → 你自己也被拦，`release:finish --push` 会返回
+  `GH006: Protected branch update failed`。这时只能走 §2 的 4B：推 release 分支 → 网页开 PR → 合并 → 在 main 上打 tag。
+
+两种都对，区别只是「发版要不要多点几下鼠标」。单人或两三人团队选前者。
+
+#### 2. 保护 tag：New ruleset → New tag ruleset
+
+分支规则**管不到 tag**，tag 要单独建一条：
+
+| 配置项 | 值 |
+|---|---|
+| Target tags | `v*`（fnmatch 风格，要覆盖 `v1.0.0` 这类） |
+| Restrict creations | 勾 |
+| Restrict updates | 勾 |
+| Restrict deletions | 勾 |
+| Bypass list | **只加你自己** |
+
+效果：陌生人推 `v9.9.9` 到你的仓库会被拒绝（他们本来也没写权限，这层是防协作者误操作）；
+你自己 `git push origin v1.0.2` 照常。**版本号从此只有一个人能产生**，这是 tag 作为「可回溯承诺」的前提（§4.4）。
+
+#### 3. 合并方式：Settings → General → Pull Requests
+
+| 配置 | 值 | 理由 |
+|---|---|---|
+| Allow merge commits | 留 | 与 `--no-ff` 的边界一致 |
+| Allow squash merging | 关 | squash 会抹掉「这一版从哪开始」，tag 回溯失去意义 |
+| Allow rebase merging | 关 | 同上 |
+| Automatically delete head branches | 勾 | 免得仓库里堆满已合并的 `feature/*` |
+
+#### 4. 配好之后的行为
+
+| 尝试动作 | GitHub 回执 | `main` 是否变化 |
+|---|---|---|
+| 陌生人推 `main` | `remote: Permission to … denied` | 否 |
+| 协作者（无 bypass）推 `main` | `GH006: Protected branch update failed`，非 0 退出 | 否 |
+| 任何人强推 `main` | `GH006` + `Cannot force-push to a protected branch` | 否 |
+| 任何人删 `main` | `GH006` + `Cannot delete a protected branch` | 否 |
+| 推 `v*` tag（不在 bypass） | `GH013: Repository rule violations found` | 不涉及 |
+
+> 判据很简单：GitHub 是**直接拒绝并返回非 0 退出码**，所以「命令成功」就一定是真的成功。
 
 ### 11.7 维护者标识与本地兜底
 
 仓库根目录的 [`.release-owner`](../../.release-owner) 记录维护者邮箱（一行一个，`#` 开头为注释）：
 
 ```text
-XiaoZuiNiZhenHao@users.noreply.gitee.com
+107183759+xznzh@users.noreply.github.com
 ```
 
 - `pnpm release:finish`、`pnpm release:tag` 会校验 `git config user.email`；不匹配直接失败并提示走 MR。
@@ -358,6 +405,42 @@ XiaoZuiNiZhenHao@users.noreply.gitee.com
 - 版本号由维护者在 `release:start` / 发版时决定；贡献者的 feature 分支**不要改** `package.json` 的 version。
 - tag 只在 `main` 的合并提交上打，且只由维护者打；多人各打 tag 会让版本号打架、无法回溯。
 - 发错版本：发新补丁版，禁止移动或覆盖已有 tag（§4）。
+- **唯一例外**是 §11.9 的一次性历史重写——那不是「换版本」，是「换身份」，必须连同 tag 一起重建。
+
+### 11.9 一次性历史重写（例外通道）
+
+只有三种情况值得动历史：**提交身份错了**（作者邮箱对不上账号，贡献图归零）、**误提交了密钥**、**仓库整体迁移**。
+其余场景一律用新提交往前修，不要回头改。
+
+动之前先做两件事，缺一不可：
+
+```bash
+git bundle create /path/to/backup.bundle --all      # 全量备份（含所有分支与 tag）
+git ls-remote origin                                # 确认远端只有自己的提交、没有别人的分支
+```
+
+重写本身用 `filter-branch`（或 `git-filter-repo`）。**注意两处默认行为会绊你**：
+
+| 坑 | 说明 |
+|---|---|
+| `--branches --tags` 才覆盖全量 | 只写 `--all` 会连 `refs/remotes/*` 一起重写，产生一堆无效引用 |
+| `--msg-filter` 不改 tag 说明 | 提交说明与 tag 说明是两套；tag 说明要 `git tag -a -f` 重建 |
+
+**推不上去是正常的**：`pre-push` 会拦「非快进覆盖远端分支」。放行用脚本内置开关，**不是 `--no-verify`**：
+
+```bash
+GIT_GUARD_SKIP=1 git push -f origin main           # 钩子仍会运行，只是脚本内部放行
+git push -f origin v1.0.0 v1.0.1 v1.0.2            # tag 逐个重建后强推
+```
+
+推完必须做三件事：
+
+1. **核对内容零差异**：`git diff <重写前的 SHA> main --stat` 必须为空。不为空说明改坏代码了，立刻从 bundle 恢复。
+2. **核对身份**：`git log --format='%ae | %ce' | sort -u` 只应剩维护者邮箱。
+3. **通知已有克隆**：所有 SHA 都变了，别人 `git pull` 会冲突，只能 `git fetch origin && git reset --hard origin/main`。
+
+> 远端如果已开 §11.6 的 Rulesets，强推会被 GitHub 直接拒（`GH006`），需要先在网页临时关掉
+> `Block force pushes`，推完再打开。
 
 ## 相关
 

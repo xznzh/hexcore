@@ -5,7 +5,7 @@
 ## 先把项目跑起来
 
 ```bash
-git clone https://gitee.com/XiaoZuiNiZhenHao/hexcore.git && cd hexcore
+git clone https://github.com/xznzh/hexcore.git && cd hexcore
 cp .env.example .env.local     # 首次启动唯一必填项是 APP_SECRET，可随意填
 pnpm install
 pnpm dev                        # 打开 http://localhost:3000，先注册的账号即管理员
@@ -28,11 +28,15 @@ pnpm dev                        # 打开 http://localhost:3000，先注册的账
 | 检索怎么算相关 | `lib/ai/rag.ts`：向量快路径（pgvector）→ 内存词法兜底 → `blendScore` → 相关性闸门 |
 | 模型怎么接 | `lib/ai/providers.ts`：统一 OpenAI 兼容接口，国产模型 / Ollama / 演示模式都走这一层 |
 | 治理层有哪些 | `lib/agent/`（21 个模块）：输出护栏、运行时校验、幂等、防打转、质量告警 |
-| 怎么证明「改好了」 | `tests/`（956 个用例）+ `evals/`（38 条评测基线，`pnpm eval`） |
+| 怎么证明「改好了」 | `tests/`（995 个用例）+ `evals/`（38 条评测基线，`pnpm eval`） |
+
+> 读代码时会遇到形如 `V8.3` / `V8.10` 的注释标记：那是**公开首发前的内部迭代批次号**，
+> 只用于溯源「这段为什么长这样」，与发布版本号（`v1.0.0` 起）不是同一套序列，
+> 对照表在 [`docs/03-迭代/README.md`](docs/03-迭代/README.md)。
 
 ## 分支与提交
 
-**`main` 在服务端是受保护的**：不能直推、不能强推、不能删除，任何人都只能通过 Pull Request 合入，且只有维护者能点合并。本地还有 git hook 做第一道拦截。
+**`main` 按本项目的分支规范是受保护分支**（配置步骤见 [发布规范 §11.6](docs/04-规范/Git分支与发布规范.md)）：不能直推、不能强推、不能删除，改动只能通过 Pull Request 合入，且只有维护者能点合并。本地还有 git hook 做第一道拦截。
 
 一条改动要走完的路径：
 
@@ -42,14 +46,14 @@ git switch -c feature/your-topic          # 从 main 切，命名 feature/<主�
 pnpm check                                # 提交前自检：typecheck + 界面规范 + 全量单测
 git commit -m 'fix(rag): 中文问句两轮召回'
 git push -u origin feature/your-topic     # 推自己的分支
-# 在 Gitee 开 PR：feature/your-topic → main
+# 在 GitHub 开 PR：feature/your-topic → main
 ```
 
 维护者收尾（维护者专用，贡献者不用管）：
 
 ```bash
 git switch main && git pull --ff-only
-pnpm release:tag 8.18.0 --push            # 在 main 的合并提交上打 tag
+pnpm release:tag 1.1.0 --push             # 在 main 的合并提交上打 tag
 ```
 
 - 提交信息用 `<type>(<scope>): <描述>`，type 取 `feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert`
@@ -62,7 +66,7 @@ pnpm release:tag 8.18.0 --push            # 在 main 的合并提交上打 tag
 提交时 hook 会自动跑 `tsc --noEmit`，完整门禁需手动跑：
 
 ```bash
-pnpm check     # = typecheck + lint:ui（界面规范）+ vitest（956 用例）
+pnpm check     # = typecheck + lint:ui（界面规范）+ vitest（995 用例）
 ```
 
 界面改动还有额外约束，写之前请读 [`docs/04-规范/界面开发规范.md`](docs/04-规范/界面开发规范.md)（颜色 token、间距、可访问名都有源码级守卫）。

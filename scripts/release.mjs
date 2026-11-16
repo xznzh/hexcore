@@ -329,7 +329,8 @@ async function guardPush() {
       if (!isAncestor) {
         fail(`禁止强推覆盖远端分支 ${remoteBranch}`, [
           '远端有你本地没有的提交，强推会丢别人的工作。',
-          '先 git pull --rebase，解决冲突后再推；确需强推请让管理员在远端处理。',
+          '先 git pull --rebase，解决冲突后再推。',
+          '确需重写历史（身份修正 / 误提交密钥 / 仓库迁移）：先备份，再用 GIT_GUARD_SKIP=1 显式放行，做法见发布规范 §11.9。',
         ]);
       }
     }
