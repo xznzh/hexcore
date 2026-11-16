@@ -1,9 +1,8 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 /**
  * 评测专用配置（`npm run eval`）。
- * 与 vitest.config.ts 分开的原因：评测要真调模型、耗时几分钟、结果有波动，
+ * 与 vitest.config.mts 分开的原因：评测要真调模型、耗时几分钟、结果有波动，
  * 绝不能混进 `npm run check` 的质量门禁里。EVAL_RUN 由 test.env 注入，
  * 测试文件用 describe.skipIf 兜底——即使有人误用默认配置跑它也会跳过。
  *
@@ -13,7 +12,7 @@ import path from 'path';
  */
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(__dirname, '.') },
+    alias: { '@': import.meta.dirname },
   },
   test: {
     include: ['evals/**/*.test.ts'],

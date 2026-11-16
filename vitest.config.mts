@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(__dirname, '.') },
+    // 文件后缀是 .mts：Vite 会把它当 ESM 加载（configLoader: 'native'），
+    // ESM 里没有 __dirname，用 import.meta.dirname（Node ≥ 20.11）。
+    alias: { '@': import.meta.dirname },
   },
   test: {
     // `evals/judge.test.ts` 与 `evals/adversarial.test.ts` 也进这里：两者都是纯函数，

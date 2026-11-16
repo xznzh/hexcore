@@ -6,7 +6,7 @@
  * 所以这里刻意在两次调用之间清空内存，强制走 DB 分支。
  *
  * 门控方式与 pgvector 用例一致：默认跳过，显式开启才跑，且只连隔离库。
- *   QA_IDEM_E2E=1 npx vitest run tests/idempotency-db-e2e.test.ts --config vitest.config.ts
+ *   QA_IDEM_E2E=1 npx vitest run tests/idempotency-db-e2e.test.ts --config vitest.config.mts
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';

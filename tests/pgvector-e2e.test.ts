@@ -4,7 +4,7 @@
  * 为什么单独一个文件：常规单测必须零 I/O、任何机器都能跑；而这条用例要连真实
  * PostgreSQL 并读 `.env.local`，所以默认跳过，只有显式设置 QA_PGVECTOR_E2E=1 才执行：
  *
- *   QA_PGVECTOR_E2E=1 npx vitest run tests/pgvector-e2e.test.ts --config vitest.config.ts
+ *   QA_PGVECTOR_E2E=1 npx vitest run tests/pgvector-e2e.test.ts --config vitest.config.mts
  *
  * 为什么用 `embedding_model='local'`：2026-11-09 第二轮实测里，云端 MiniMax embedding
  * 查询向量超时（30s），问答退回内存路径，导致「装了 pgvector 却没走到 `<=>`」始终只有

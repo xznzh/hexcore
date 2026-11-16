@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 /**
  * 对照实验配置（`npm run eval:nogate`）：关掉相关度闸门，其它完全一样。
@@ -10,7 +9,7 @@ import path from 'path';
  */
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(__dirname, '.') },
+    alias: { '@': import.meta.dirname },
   },
   test: {
     include: ['evals/**/*.test.ts'],

@@ -7,7 +7,7 @@
  */
 import { spawnSync } from 'node:child_process';
 
-const r = spawnSync('npx', ['vitest', 'run', '--config', 'vitest.eval.config.ts'], {
+const r = spawnSync('npx', ['vitest', 'run', '--config', 'vitest.eval.config.mts'], {
   stdio: 'inherit',
   env: { ...process.env, EVAL_NO_ASSERT: '1' },
   // Windows 下 npx 是 npx.cmd，需要经 shell 解析；shell 同时兼容 sh
