@@ -181,7 +181,7 @@ pnpm e2e          # Playwright 端到端
 | 参与贡献 / 提 PR | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`docs/04-规范/Git分支与发布规范.md`](docs/04-规范/Git分支与发布规范.md) |
 | 报告安全问题 | [`SECURITY.md`](SECURITY.md) |
 | 看每个版本改了什么 | [`CHANGELOG.md`](CHANGELOG.md) |
-| 看技术推演与踩坑过程 | [`docs/03-迭代/版本演进记录-v2到v8.md`](docs/03-迭代/版本演进记录-v2到v8.md) |
+| 看技术推演与踩坑过程 | [`docs/02-设计/技术说明-学习版.md`](docs/02-设计/技术说明-学习版.md) |
 | 了解评测怎么做的 | [`evals/README.md`](evals/README.md) |
 
 ---

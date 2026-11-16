@@ -38,7 +38,7 @@ pnpm release:start 7.6.0             # 版本号由用户确认，禁止自行�
 ```
 
 - 已在 `release/vX.Y.Z` 且版本一致 → 不要重复开分支。
-- 用户没说版本号 → 问；参考上一版 tag 与 `docs/03-迭代/` 最新一轮再给建议。
+- 用户没说版本号 → 问；参考上一版 tag 再给建议。
 - `release:start` 会自动改 `package.json` 的 version，不要手动再改一遍。
 
 ## 提交
@@ -60,7 +60,7 @@ pnpm release:check
 
 - 四项全绿才算过：typecheck、界面规范、单测、文档链接。
 - 改了登录 / 对话 / 知识库 / 发布主流程 → 追加 `pnpm e2e`。
-- 改了 `docs/` → 同步 `docs/README.md` 索引；新增迭代记录放 `docs/03-迭代/`。
+- 改了 `docs/` → 同步 `docs/README.md` 索引。
 - 失败时只修根因，不删测试、不放宽断言、不注释掉检查项。
 
 ## 多人协作（非维护者）
