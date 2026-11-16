@@ -1,0 +1,5 @@
+#!/bin/sh
+# 安装：pnpm hooks:install
+# 规则：docs/04-规范/Git分支与发布规范.md
+# 拦住「直接 push main」和「强推覆盖远端分支」
+exec node scripts/release.mjs guard:push

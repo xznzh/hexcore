@@ -1,0 +1,65 @@
+# dependencies
+node_modules/
+node_modules_bak/
+
+# next.js
+.next/
+# 隔离构建产物（NEXT_DIST_DIR=.next-build 时用；dev server 开着也能验证构建）
+.next-build/
+out/
+build/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+.env*.local
+
+# local database & uploaded files
+agent_platform.db
+agent_platform.db-journal
+data/
+# 参考项目快照（非本项目代码）不进仓库
+docs/reference/
+docs/06-参考/reference/
+
+# 本地调试产物（临时脚本 / 日志 / 截图 / 旧构建缓存）
+.manual-tmp/
+.next-stale-*/
+
+# Next 14 → 15 升级前留的回滚点（package.json / next.config.mjs 等旧版副本）
+# 升级已验证通过，仅作本地兜底，不进仓库
+.backup-next14/
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# 评测运行产物：趋势图 / 回归告警 / 夜间日志都由脚本重新生成，不入库
+# （报告本身的 json/md 仍然入库，它们是可追溯的历史）
+evals/reports/trend.html
+evals/reports/ALERT.md
+evals/reports/nightly-*.log
+
+# Playwright 产物：失败截图/追踪每次跑都变，入库只会制造无意义 diff
+/test-results/
+/playwright-report/
+
+# QA 巡检运行态：截图、接口快照、以及 auth*.json（内含登录 Cookie，属于凭据）
+# 巡检脚本本身（qa/*.mjs）仍可入库，运行时由脚本自行重建这些文件
+qa/full-scan/
+qa/full-scan-*.png
+
+# 评测运行产物：报告的 answer 正文会原样复述知识库内容，
+# 一旦知识库里有内部资料/接口凭据，报告就会把它们写进仓库。只保留代码与基线，不入库报告。
+/evals/reports/
+
+# 构建缓存残留（改配置后 Next 的旧产物备份），不应入库
+/.next-stale-bak/
+
+# QA 测试资产：内部跑过的对话记录、BUG 跟踪、探针脚本。
+# 不入库的三个原因：① 对话记录里是真实模型输出与测试账号，属内部痕迹；
+# ② 探针脚本里写着测试账号明文密码；③ 体积 39MB，与产品本身无关。
+# 需要时在本地保留即可。
+/qa/

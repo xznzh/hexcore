@@ -1,0 +1,3 @@
+# Git 钩子必须在 POSIX shell 中执行，强制 LF，避免 Windows 的 CRLF 让 shebang 失效
+.githooks/** text eol=lf
+*.sh text eol=lf

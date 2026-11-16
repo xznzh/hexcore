@@ -1,0 +1,5 @@
+{
+  "golden": { "minPass": 36, "total": 38 },
+  "adversarial": { "minRate": 0.9 },
+  "note": "minPass 依据：当前基线 38/38（2026-11-13 实测：answer 12/12、abstain 26/26、检索命中 12/12），留 2 条余量给模型抖动。低于 minPass 视为真实退化，先跑 pnpm eval:diff 归因，不要直接调低这个数。评测集已改为基于内置虚构示例文档，因此可在 DEMO_MODE=1 下离线复现（不需要任何 API Key）——但演示模式是抽取式回答，个别条目抖动会更大。"
+}

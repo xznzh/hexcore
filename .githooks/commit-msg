@@ -1,0 +1,4 @@
+#!/bin/sh
+# 安装：pnpm hooks:install
+# 规则：docs/04-规范/Git分支与发布规范.md
+exec node scripts/release.mjs guard:msg "$1"

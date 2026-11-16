@@ -1,0 +1,85 @@
+# 一键全栈：PostgreSQL(pgvector) + Redis + 应用本体。
+#
+#   docker compose up -d --build      # 首次构建，之后约 1~2 分钟起来
+#   打开 http://localhost:3000        # 第一个注册的账号自动成为管理员
+#
+# 本机已有 PostgreSQL / Redis 占着 5432 / 6379 时，在 .env 里加一行再启动即可：
+#   POSTGRES_PORT=5433
+#   REDIS_PORT=6380
+# （只影响从宿主机访问的端口；应用容器内部仍走服务名 postgres:5432 / redis:6379）
+#
+# 默认开启演示模式（DEMO_MODE=1）：不需要任何模型 Key 就能登录、建知识库、提问、看到引用来源。
+# 想接真实模型：浏览器里进「后台 → 模型」填 Key，再把 DEMO_MODE 设成 0 重启。
+#
+# ⚠️ APP_SECRET 未设置时会退化为内置默认值（仅为本机试用方便，启动日志会告警）。
+#    对外提供服务前必须执行一次：
+#      echo "APP_SECRET=$(openssl rand -hex 32)" > .env
+#      docker compose up -d
+#    否则任何人都能用公开的默认密钥伪造管理员会话。
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: hexcore-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_agent_platform
+    ports:
+      # 只绑回环：宿主机 psql 能用，外部网络扫不到这个库
+      # 本机 5432 已被别的 PostgreSQL 占用时，在 .env 里设 POSTGRES_PORT=5433 即可；
+      # 应用容器内部始终走服务名 postgres:5432，不受这个映射影响。
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_agent_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hexcore-redis
+    restart: unless-stopped
+    ports:
+      # 同样可在 .env 里用 REDIS_PORT 避开本机已占用的 6379
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    image: hexcore:local
+    container_name: hexcore-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # 注意 host 用服务名 postgres / redis，不是 localhost —— 容器内 localhost 指向容器自己
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ai_agent_platform
+      REDIS_URL: redis://redis:6379
+      APP_SECRET: ${APP_SECRET:-}
+      # 未设置 APP_SECRET 时允许启动（复用应用内已有的逃生开关），启动日志会打醒目告警
+      ALLOW_INSECURE_SECRET: ${ALLOW_INSECURE_SECRET:-1}
+      # 演示模式：无需模型 Key 跑通对话 + 检索 + 引用；接真实模型后设为 0
+      DEMO_MODE: ${DEMO_MODE:-1}
+      APP_ORIGINS: ${APP_ORIGINS:-}
+      # 向量维度需与所选 embedding 模型一致；改这里要清空并重建知识库向量
+      EMBED_DIM: ${EMBED_DIM:-384}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # 上传件与生成的 docx/pptx 落在磁盘，必须持久化，否则重建容器就丢
+      - appdata:/app/data
+
+volumes:
+  pgdata:
+  appdata:

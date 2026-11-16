@@ -1,0 +1,52 @@
+name: CI
+
+# 与 `pnpm check` 同源：本地能过的，这里也应该过。
+# 拆成四个 step 而不是直接跑 `pnpm check`，是为了失败时能一眼看出
+# 是类型、界面规范、单测还是文档链接挂了。
+#
+# 无 Postgres / Redis：单测在设计上不依赖它们（连不上库时 957 通过 8 跳过），
+# 需要真实库的 e2e 由 QA_PGVECTOR_E2E / QA_IDEM_E2E 显式开关控制，CI 默认不跑。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 界面规范
+        run: pnpm lint:ui
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: 文档链接
+        run: node scripts/check-doc-links.mjs .

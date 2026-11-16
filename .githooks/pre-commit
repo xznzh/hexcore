@@ -1,0 +1,5 @@
+#!/bin/sh
+# 安装：pnpm hooks:install
+# 规则：docs/04-规范/Git分支与发布规范.md
+# 允许在拦不住的环境里临时跳过：GIT_GUARD_SKIP=1 git commit ...
+exec node scripts/release.mjs guard:commit
