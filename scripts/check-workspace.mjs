@@ -49,7 +49,23 @@ for (const entry of include) {
 const dup = include.filter((v, i) => include.indexOf(v) !== i);
 if (dup.length) problems.push(`tsconfig.json 的 include 有重复项：${[...new Set(dup)].join(', ')}`);
 
-// —— 2. 环境文件是否被跟踪 ——
+// —— 2. next-env.d.ts 的 reference path ——
+// 同一根因的第二个受害者：Next 也会把 routes.d.ts 的引用路径改成当前 distDir，
+// 而这个文件**在版本库里**。被污染后别人 clone 下来类型检查就指向不存在的目录。
+try {
+  const envDts = fs.readFileSync('next-env.d.ts', 'utf8');
+  const m = envDts.match(/"\.\/([^/"]+)\/types\/routes\.d\.ts"/);
+  if (m && m[1] !== '.next') {
+    problems.push(
+      `next-env.d.ts 指向了 "${m[1]}/types/routes.d.ts"，应为 ".next"。\n` +
+        `    这同样是 NEXT_DIST_DIR 的副作用，执行 git checkout next-env.d.ts 恢复。`,
+    );
+  }
+} catch {
+  // 文件不存在（未跑过 next dev/build 的全新 clone）属正常
+}
+
+// —— 3. 环境文件是否被跟踪 ——
 try {
   const tracked = execFileSync('git', ['ls-files', '.env', '.env.local', '.env.*.local'], {
     encoding: 'utf8',
